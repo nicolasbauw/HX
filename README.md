@@ -1,4 +1,4 @@
-# HX DOS Extender — fork with a faithful PE header
+# HX DOS Extender — fork with a few loader and GDI fixes
 
 This is a fork of [HX DOS Extender](https://github.com/Baron-von-Riedesel/HX) by
 Japheth (Baron-von-Riedesel). All the credit for HX goes to him; this fork only
@@ -6,7 +6,8 @@ carries a few fixes needed by [Bare86](https://github.com/nicolasbauw/bare86), a
 program that runs DOS programs, and Windows programs through HX, on Linux.
 
 Upstream is based on v2.24 (`198ec32`). Nothing else than what is listed under
-[What this fork changes](#what-this-fork-changes) differs from it.
+[What this fork changes](#what-this-fork-changes) differs from it. Two binaries
+differ from the official HX package: `DPMILD32.EXE` and `DGDI32.DLL`.
 
 ## What HX is
 
@@ -55,8 +56,8 @@ table, module name, small heap) at `base + NTOFS` (`NTOFS = 0x600`), instead of
 the programs tried). When `e_lfanew` is outside `0x40`–`0x300`, the loader behaves as
 before (non-faithful header, `e_lfanew` pointing to its own copy).
 
-Nothing else of HX is touched. The change is in `Src/DPMILDR/PELOAD.ASM`; the
-diff against upstream v2.24 is about 140 lines.
+The change is in `Src/DPMILDR/PELOAD.ASM`; the diff against upstream v2.24 is
+about 140 lines.
 
 **Measured** (under Bare86, see below):
 
@@ -71,6 +72,33 @@ diff against upstream v2.24 is about 140 lines.
 standard DOS file calls (`INT 21h`, functions 42h and 3Fh), but it has been run only
 under Bare86's emulated PC. Reports from real machines are welcome.
 
+### 2. `SetDIBits` copies the lines it is given (DGDI32)
+
+**Symptom.** Some programs stop with `exception C0000005` in `gdi32.dll`, reading
+past the end of a buffer (found with the intro `3s-money`, and `haetten`,
+`WURST!!` among a collection of Win32 demos).
+
+**Cause.** `SetDIBits(hdc, hbm, uStartScan, cScanLines, lpvBits, lpbmi, usage)`
+receives `cScanLines` lines in `lpvBits`, the first one being scan line
+`uStartScan`. DGDI32 ignored `cScanLines` and copied the whole height of the
+bitmap, starting at `uStartScan`: a program that sends one line at a time made it
+read the memory behind that line.
+
+**Change.** `SrcEmu/DGDI32/DIBITMAP.ASM`: only `cScanLines` lines are copied (clamped
+to what is left in the bitmap), to the rows that correspond to `uStartScan`
+(counted from the bottom for a bottom-up bitmap). For `uStartScan = 0` and a full
+bitmap, the usual call, the copy is the same as before.
+
+`3s-money` goes past this fault with the change. (It then stops later, at a missing
+DirectX object: a different problem, not fixed here.)
+
+### 3. `GetDeviceCaps(RASTERCAPS)` declares `StretchBlt` and `StretchDIBits` (DGDI32)
+
+`StretchBlt` and `StretchDIBits` are implemented (`STRETCH.ASM`) but not declared
+by `GetDeviceCaps(RASTERCAPS)` (`RC_STRETCHBLT`, `RC_STRETCHDIB`). The launcher of
+Half-Life checks them and stops with “Your graphics card does not support a
+necessary raster operation”. `SrcEmu/DGDI32/DEVCAPS.ASM` now declares them.
+
 ## Building
 
 HX's own build needs Open Watcom's `wmake` or `nmake`, JWasm, JWlink and a DOS or
@@ -80,6 +108,8 @@ nothing but `gcc`, `make` and `git`:
 ```sh
 build-linux/build-dpmild32.sh [WORK_DIR]     # default WORK_DIR: /tmp/hx-build
 # result: WORK_DIR/b/ldr/out/DPMILD32.EXE
+build-linux/build-dgdi32.sh   [WORK_DIR]
+# result: WORK_DIR/dgdi32/out/DGDI32.DLL
 ```
 
 The script fetches and builds JWasm and JWlink from their own repositories, copies
@@ -88,15 +118,22 @@ same three assemblies and the same link as `Src/DPMILDR/DPMILD32.MAK`. Built fro
 the unmodified upstream sources, its result is byte-identical to the `DPMILD32.EXE`
 of the official HX 2.23 package (the loader did not change between 2.23 and 2.24).
 
-The other parts of HX (HDPMI, the DLLs) are **not** rebuilt by this fork: use
+`build-dgdi32.sh` also downloads the import libraries of the official HXDEV package
+(SHA-256 checked) and links with JWlink. Its DLL has the same size as the official
+one but is not byte-identical (other linker, other order; two builds of the same
+sources differ by one byte, a time stamp). It was checked by running programs, not
+by comparison: HX's own `GDITEST.EXE` and 45 demos that already worked give the same
+images with it as with the official DLL.
+
+The other parts of HX (HDPMI, the other DLLs) are **not** rebuilt by this fork: use
 the binaries of the [official packages](https://github.com/Baron-von-Riedesel/HX/releases)
-and replace `BIN/DPMILD32.EXE` with the one of this fork's releases.
+and replace `BIN/DPMILD32.EXE` and `BIN/DGDI32.DLL` with the ones of this fork's releases.
 
 ## Use with Bare86
 
 [Bare86](https://github.com/nicolasbauw/bare86) downloads the official HX package on
-first use and checks its SHA-256. The fork's `DPMILD32.EXE` replaces the official
-one in the same directory; both can be told apart by their SHA-256, given in each
+first use and checks its SHA-256. The fork's `DPMILD32.EXE` and `DGDI32.DLL` replace the official
+ones in the same directory; both can be told apart by their SHA-256, given in each
 release's notes.
 
 ## Relation to upstream

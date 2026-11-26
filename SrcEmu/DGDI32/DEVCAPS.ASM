@@ -35,7 +35,9 @@ GetDeviceCaps proc public hdc:DWORD, nIdx:DWORD
 			.elseif (edx == RASTERCAPS)
 ;--- RC_DI_BITMAP: device supports GetDIBits
 ;--- RC_DIBTODEV: device supports SetDIBitsToDevice
-            	mov eax, RC_BITBLT or RC_BITMAP64 or RC_GDI20_OUTPUT or RC_GDI20_STATE or RC_DI_BITMAP or RC_OP_DX_OUTPUT or RC_DEVBITS or RC_DIBTODEV
+;--- RC_STRETCHBLT, RC_STRETCHDIB: StretchBlt and StretchDIBits are implemented (STRETCH.ASM);
+;--- some programs (the Half-Life launcher) refuse to start if they are not declared
+            	mov eax, RC_BITBLT or RC_BITMAP64 or RC_GDI20_OUTPUT or RC_GDI20_STATE or RC_DI_BITMAP or RC_OP_DX_OUTPUT or RC_DEVBITS or RC_DIBTODEV or RC_STRETCHBLT or RC_STRETCHDIB
                 .if ([ecx].DCOBJ.dwBpp <= 8)
                 	or eax, RC_PALETTE
                 .endif

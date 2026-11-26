@@ -161,6 +161,8 @@ SetDIBits proc public uses ebx esi edi hdc:DWORD, hBitmap:DWORD, uStartScan:DWOR
 		cScanLines:DWORD, lpvBits:ptr, lpbmi:ptr BITMAPINFO, uUsage:DWORD
 
 local	dwHeight:DWORD
+local	dwLines:DWORD
+local	dwDstY:DWORD
 local	dcDst:DCOBJ
 local	dcSrc:DCOBJ
 
@@ -225,8 +227,31 @@ local	dcSrc:DCOBJ
 			add eax, [esi].BITMAPINFOHEADER.biSize
 			mov dcDst.pColorTab, eax
 
-			invoke BitBlt, addr dcDst, 0, 0, [esi].BITMAPINFOHEADER.biWidth, dwHeight, addr dcSrc, uStartScan, 0, SRCCOPY
-
+;--- lpvBits holds cScanLines lines only, the first one being scan line uStartScan of
+;--- the bitmap (scan lines are counted from the bottom for a bottom-up bitmap):
+;--- copy these lines, not the whole height of the bitmap (reading past the buffer
+;--- made DGDI32 fault for programs that send one line at a time).
+			mov eax, uStartScan
+			mov ecx, dwHeight
+			cmp eax, ecx
+			jae noscan			;start line outside of the bitmap: nothing to copy
+			sub ecx, eax			;lines left in the bitmap
+			cmp ecx, cScanLines
+			jbe @F
+			mov ecx, cScanLines
+@@:
+			mov dwLines, ecx
+			mov dcSrc.dwHeight, ecx
+			mov edx, uStartScan		;top-down: first line = uStartScan
+			test dcDst.dwFlags, DCF_BOTTOM_UP
+			jz @F
+			mov edx, dwHeight		;bottom-up: first line = height - uStartScan - lines
+			sub edx, uStartScan
+			sub edx, ecx
+@@:
+			mov dwDstY, edx
+			invoke BitBlt, addr dcDst, 0, dwDstY, [esi].BITMAPINFOHEADER.biWidth, dwLines, addr dcSrc, 0, 0, SRCCOPY
+noscan:
 			mov eax, cScanLines
 ifdef _DEBUG
 			mov edx, hBitmap
