@@ -94,9 +94,8 @@ DirectX object: a different problem, not fixed here.)
 
 ### 3. `GetDeviceCaps(RASTERCAPS)` declares `StretchBlt` and `StretchDIBits` (DGDI32)
 
-`StretchBlt` and `StretchDIBits` exist (`STRETCH.ASM`; they copy, they do **not** scale
-yet) but were not declared by `GetDeviceCaps(RASTERCAPS)` (`RC_STRETCHBLT`,
-`RC_STRETCHDIB`). The launcher of
+`StretchBlt` and `StretchDIBits` exist (`STRETCH.ASM`; they scale since item 5 below)
+but were not declared by `GetDeviceCaps(RASTERCAPS)` (`RC_STRETCHBLT`, `RC_STRETCHDIB`). The launcher of
 Half-Life checks them and stops with “Your graphics card does not support a
 necessary raster operation”. `SrcEmu/DGDI32/DEVCAPS.ASM` now declares them.
 
@@ -108,7 +107,22 @@ believed the source to be 800×600 and read past the end of a smaller bitmap
 (the 2001 fast intro `WURST!!` crashed in `gdi32.dll`). `SrcEmu/DGDI32/STRETCH.ASM`
 now sets width and height from the bitmap header, rounds the pitch to a dword
 (DIB lines are dword aligned) and marks a positive-height bitmap as bottom-up (it
-was drawn upside down). `WURST!!` runs and shows its picture, unscaled.
+was drawn upside down). `WURST!!` runs and shows its picture.
+
+### 5. `StretchBlt` and `StretchDIBits` scale the picture (DGDI32)
+
+Both only copied: a destination rectangle of another size than the source rectangle
+showed the source unscaled (the code said “there is no stretch in size implemented
+as of yet”). `SrcEmu/DGDI32/STRETCH.ASM` now scales with the nearest neighbour for
+`SRCCOPY` and sources of 8, 16, 24 and 32 bits: the source rectangle is resampled
+into a temporary bitmap of the size of the destination (cut to the size of the
+destination DC), with the orientation of the source, which `BitBlt()` then copies,
+so the color conversion stays where it was. Same sizes, other raster operations and
+1 and 4 bit sources go to `BitBlt()` as before. `StretchDIBits` now takes the origin of
+the source rectangle of a bottom-up DIB at its lower left corner, as Windows does.
+No interpolation (`HALFTONE` and `STRETCH_*` modes are ignored). Tested with a 4×4
+picture stretched to 160×160 and a 2×2 sub-rectangle (`c/tests/win32/stretch.c` of
+[Bare86](https://github.com/nicolasbauw/bare86), test `hx_stretch`).
 
 ## Building
 
