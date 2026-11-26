@@ -22,6 +22,11 @@ endif
 
 	.CODE
 
+.DATA
+externdef g_bPalPE:byte
+externdef g_syspal:PALETTEOBJ
+	.CODE
+
 BitBlt proc public uses esi edi ebx hdcDest:DWORD, dwXDest:DWORD, dwYDest:DWORD, nWidth:DWORD, nHeight:DWORD,
 				hdcSrc:DWORD, dwXSrc:DWORD, dwYSrc:DWORD, dwRop:DWORD
 
@@ -62,6 +67,9 @@ endif
 		invoke HideMouse
 		mov dwRestore, offset ShowMouse
 @@:
+		mov ecx, [edi].DCOBJ.dwFlags
+		and ecx, DCF_SCREEN			;the table of the screen is the system palette (PALETTEENTRY)
+		setnz byte ptr g_bPalPE
 		mov ecx, [edi].DCOBJ.lPitch
 		mov edx, [edi].DCOBJ.dwBpp
 		mov eax, [edi].DCOBJ.dwHeight
@@ -109,6 +117,15 @@ if 1
 endif
 		mul dwBpp
 		mov ebx, [edi].DCOBJ.pColorTab
+;--- the screen of 8 bit shows the system palette (256 entries): colors are matched to it.
+;--- the table of the DC is the one of the selected palette, which is the stock palette
+;--- (20 entries, the others zero) by default
+		test [edi].DCOBJ.dwFlags, DCF_SCREEN
+		jz nosyspal
+		cmp [edi].DCOBJ.dwBpp, 8
+		jnz nosyspal
+		mov ebx, offset g_syspal.ColorTab
+nosyspal:
 		shr eax, 3
 		add eax, ecx
 		add eax, [edi].DCOBJ.pBMBits

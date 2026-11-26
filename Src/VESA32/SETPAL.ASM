@@ -188,7 +188,7 @@ failed2:
 				movzx eax,ax
 				xchg al,ah
 				shl eax, 8
-				mov al,bl
+				mov al,bh		;red (the index was stored here before)
 				stosd
 				dec ecx
 				inc bl
@@ -231,7 +231,7 @@ use6bit:
 				movzx eax,ax
 				xchg al,ah
 				shl eax, 8
-				mov al,bl
+				mov al,bh		;red (the index was stored here before)
 				stosd
 				dec ecx
 				inc bl

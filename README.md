@@ -6,8 +6,8 @@ carries a few fixes needed by [Bare86](https://github.com/nicolasbauw/bare86), a
 program that runs DOS programs, and Windows programs through HX, on Linux.
 
 Upstream is based on v2.24 (`198ec32`). Nothing else than what is listed under
-[What this fork changes](#what-this-fork-changes) differs from it. Two binaries
-differ from the official HX package: `DPMILD32.EXE` and `DGDI32.DLL`.
+[What this fork changes](#what-this-fork-changes) differs from it. Three binaries
+differ from the official HX package: `DPMILD32.EXE`, `DGDI32.DLL` and `VESA32.DLL`.
 
 ## What HX is
 
@@ -124,6 +124,38 @@ No interpolation (`HALFTONE` and `STRETCH_*` modes are ignored). Tested with a 4
 picture stretched to 160×160 and a 2×2 sub-rectangle (`c/tests/win32/stretch.c` of
 [Bare86](https://github.com/nicolasbauw/bare86), test `hx_stretch`).
 
+### 6. The palette read through the DAC ports has the right red (VESA32)
+
+**Symptom.** In an 8 bit mode, `GetSystemPaletteEntries` returned entries whose
+red component was the index of the entry (`10  10 252  84`, instead of `84 252 84`),
+so that the system palette, which DGDI32 also writes back to the DAC at start-up,
+was wrong from index 10 on.
+
+**Cause.** `Src/VESA32/SETPAL.ASM`, `_GetSetVesaPaletteEntries`, the branches that read the
+DAC through the ports (taken when the DAC is handled directly, option `bHandleDAC`, or when
+the VESA call `4F09h` fails):
+the red value read from the port is kept in `bh`, but the entry was completed with
+`mov al,bl`, the loop counter (the index). **Change:** `mov al,bh` in both branches
+(6 and 8 bit DAC).
+
+### 7. `BitBlt` to an 8 bit screen matches colors in the system palette (DGDI32)
+
+**Symptom.** A 24 or 32 bit bitmap drawn on the 8 bit screen (`BitBlt`,
+`StretchBlt`, `StretchDIBits`, `SetDIBitsToDevice`) came out in wrong colors:
+pure red black, white dark grey, grey light red, and so on.
+
+**Cause (two things).** (a) The color table `BitBlt` used for the screen was the one of the
+DC, which is the stock palette by default: 20 entries, the rest zero. The search for
+the nearest color (`_col24to8`, 256 entries) therefore found black or one of
+the 20 static colors. (b) That table is a `PALETTEENTRY` table (red, green, blue),
+the pixels of a DIB are blue, green, red: red and blue were compared crosswise.
+
+**Change.** `SrcEmu/DGDI32/BITBLT.ASM`: for a screen of 8 bits, the system palette
+(`g_syspal`, 256 entries) is used; `BitBlt` tells `_col24to8` (`COLTRANS.ASM`,
+variable `g_bPalPE`) that the table is a `PALETTEENTRY` table; DIB color tables of
+memory DCs (`RGBQUAD`) are handled as before. Together with item 6, a 4×4 picture with
+a red, a green, a blue and a white corner shows pure red, green, blue and white.
+
 ## Building
 
 HX's own build needs Open Watcom's `wmake` or `nmake`, JWasm, JWlink and a DOS or
@@ -135,6 +167,8 @@ build-linux/build-dpmild32.sh [WORK_DIR]     # default WORK_DIR: /tmp/hx-build
 # result: WORK_DIR/b/ldr/out/DPMILD32.EXE
 build-linux/build-dgdi32.sh   [WORK_DIR]
 # result: WORK_DIR/dgdi32/out/DGDI32.DLL
+build-linux/build-vesa32.sh   [WORK_DIR]
+# result: WORK_DIR/vesa32/out/VESA32.DLL (same size as the official one when built from the unmodified sources)
 ```
 
 The script fetches and builds JWasm and JWlink from their own repositories, copies
@@ -152,12 +186,12 @@ images with it as with the official DLL.
 
 The other parts of HX (HDPMI, the other DLLs) are **not** rebuilt by this fork: use
 the binaries of the [official packages](https://github.com/Baron-von-Riedesel/HX/releases)
-and replace `BIN/DPMILD32.EXE` and `BIN/DGDI32.DLL` with the ones of this fork's releases.
+and replace `BIN/DPMILD32.EXE`, `BIN/DGDI32.DLL` and `BIN/VESA32.DLL` with the ones of this fork's releases.
 
 ## Use with Bare86
 
 [Bare86](https://github.com/nicolasbauw/bare86) downloads the official HX package on
-first use and checks its SHA-256. The fork's `DPMILD32.EXE` and `DGDI32.DLL` replace the official
+first use and checks its SHA-256. The fork's `DPMILD32.EXE`, `DGDI32.DLL` and `VESA32.DLL` replace the official
 ones in the same directory; both can be told apart by their SHA-256, given in each
 release's notes.
 

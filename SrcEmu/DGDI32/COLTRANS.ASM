@@ -15,6 +15,13 @@ endif
 
 externdef g_syspal:PALETTEOBJ
 
+;--- g_bPalPE: set by BitBlt(). 1 if the color table of the destination is a system palette
+;--- (PALETTEENTRY: red, green, blue), 0 if it is a DIB color table (RGBQUAD: blue, green, red).
+;--- _col24to8 gets a color as 00RRGGBB (the way a DIB stores it) in both cases.
+        .DATA
+        public g_bPalPE
+g_bPalPE db 0
+
 ;--- eax contains color
 ;--- ebx -> color table
 
@@ -38,6 +45,10 @@ _col24to8_1::
         or edi, -1
         mov dl,al
         shr eax, 8
+		cmp g_bPalPE, 0
+		jz @F
+		xchg dl, ah			;table is R,G,B: compare red with red, blue with blue
+@@:
 		.repeat
 			mov cx,[ebx+esi*4+0]       ;RED+GREEN
 			mov dh,[ebx+esi*4+2]       ;BLUE
