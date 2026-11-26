@@ -216,4 +216,8 @@ EXPORT {
  _GetDCColorMap
  pfnRealizePalette
  pfnSelectPalette
+ GetBrushOrgEx
+ SetBrushOrgEx
+ CreatePenIndirect
+ GetBkMode
 }

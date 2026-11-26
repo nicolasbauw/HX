@@ -739,4 +739,18 @@ waveOutRestart proc public hwo:dword
 
 waveOutRestart endp
 
+waveOutSetPlaybackRate proc public hwo:DWORD, dwRate:DWORD
+	mov eax, MMSYSERR_NOTSUPPORTED
+	@strace <"waveOutSetPlaybackRate(", hwo, ", ", dwRate, ")=", eax, " *** unsupp ***">
+	ret
+	align 4
+waveOutSetPlaybackRate endp
+
+waveOutGetPlaybackRate proc public hwo:DWORD, pdwRate:ptr DWORD
+	mov eax, MMSYSERR_NOTSUPPORTED
+	@strace <"waveOutGetPlaybackRate(", hwo, ", ", pdwRate, ")=", eax, " *** unsupp ***">
+	ret
+	align 4
+waveOutGetPlaybackRate endp
+
 	end

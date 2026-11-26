@@ -58,4 +58,25 @@ joyReleaseCapture proc public uJoyID:DWORD
 		align 4
 joyReleaseCapture endp
 
+joySetThreshold proc public uJoyID:DWORD, uThreshold:DWORD
+		mov eax, MMSYSERR_NODRIVER
+		@strace <"joySetThreshold(", uJoyID, ", ", uThreshold, ")=", eax, " *** unsupp ***">
+		ret
+		align 4
+joySetThreshold endp
+
+joyGetThreshold proc public uJoyID:DWORD, puThreshold:ptr DWORD
+		mov eax, MMSYSERR_NODRIVER
+		@strace <"joyGetThreshold(", uJoyID, ", ", puThreshold, ")=", eax, " *** unsupp ***">
+		ret
+		align 4
+joyGetThreshold endp
+
+joyConfigChanged proc public dwFlags:DWORD
+		xor eax, eax		;JOYERR_NOERROR
+		@strace <"joyConfigChanged(", dwFlags, ")=", eax>
+		ret
+		align 4
+joyConfigChanged endp
+
 		end

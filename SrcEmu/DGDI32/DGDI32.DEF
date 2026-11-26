@@ -215,4 +215,7 @@ EXPORTS
  _GetDCColorMap
  pfnRealizePalette DATA
  pfnSelectPalette  DATA
-
+ GetBrushOrgEx
+ SetBrushOrgEx
+ CreatePenIndirect
+ GetBkMode

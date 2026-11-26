@@ -86,4 +86,10 @@ EXPORT {
  waveOutSetVolume
  waveOutUnprepareHeader
  waveOutWrite
+ joySetThreshold
+ joyGetThreshold
+ joyConfigChanged
+ timeGetSystemTime
+ waveOutSetPlaybackRate
+ waveOutGetPlaybackRate
 }

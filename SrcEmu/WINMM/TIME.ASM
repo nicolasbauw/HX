@@ -276,4 +276,21 @@ timeGetDevCaps proc public ptc:ptr TIMECAPS, cbtc:dword
 
 timeGetDevCaps endp
 
+
+;--- the time in milliseconds, in a MMTIME structure
+
+timeGetSystemTime proc public lpTime:ptr MMTIME, uSize:DWORD
+
+	invoke GetTickCount
+	mov ecx, lpTime
+	.if (ecx)
+		mov [ecx].MMTIME.wType, TIME_MS
+		mov [ecx].MMTIME.u.ms, eax
+	.endif
+	xor eax, eax		;MMSYSERR_NOERROR
+	ret
+	align 4
+
+timeGetSystemTime endp
+
 	end

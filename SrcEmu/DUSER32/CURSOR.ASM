@@ -362,8 +362,28 @@ GetCursor endp
 ;--- set max values for cursor pos
 ;--- pRect may be NULL
 
+;--- the rectangle set by ClipCursor, for GetClipCursor
+	.DATA
+g_rcClip	RECT <0,0,0,0>
+g_bClip		dd 0
+	.CODE
+
 ClipCursor proc public pRect:ptr RECT
 
+	mov ecx, pRect
+	.if (ecx)
+		mov eax, [ecx].RECT.left
+		mov g_rcClip.left, eax
+		mov eax, [ecx].RECT.top
+		mov g_rcClip.top, eax
+		mov eax, [ecx].RECT.right
+		mov g_rcClip.right, eax
+		mov eax, [ecx].RECT.bottom
+		mov g_rcClip.bottom, eax
+		mov g_bClip, 1
+	.else
+		mov g_bClip, 0
+	.endif
 	call InitMouse
 	.if (!g_bMouse)
 		 xor eax, eax
@@ -401,6 +421,40 @@ exit:
 	ret
 	align 4
 ClipCursor endp
+
+;--- the screen if the cursor is not clipped
+
+GetClipCursor proc public uses ebx lpRect:ptr RECT
+
+	mov ebx, lpRect
+	test ebx, ebx
+	jz fail
+	.if (g_bClip)
+		mov eax, g_rcClip.left
+		mov [ebx].RECT.left, eax
+		mov eax, g_rcClip.top
+		mov [ebx].RECT.top, eax
+		mov eax, g_rcClip.right
+		mov [ebx].RECT.right, eax
+		mov eax, g_rcClip.bottom
+		mov [ebx].RECT.bottom, eax
+	.else
+		mov [ebx].RECT.left, 0
+		mov [ebx].RECT.top, 0
+		invoke GetSystemMetrics, SM_CXSCREEN
+		mov [ebx].RECT.right, eax
+		invoke GetSystemMetrics, SM_CYSCREEN
+		mov [ebx].RECT.bottom, eax
+	.endif
+	@mov eax, 1
+	jmp exit
+fail:
+	xor eax, eax
+exit:
+	@strace <"GetClipCursor(", lpRect, ")=", eax>
+	ret
+	align 4
+GetClipCursor endp
 
 GetCursorPos proc public lpPoint:ptr POINT
 	xor eax, eax

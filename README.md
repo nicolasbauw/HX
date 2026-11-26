@@ -6,8 +6,8 @@ carries a few fixes needed by [Bare86](https://github.com/nicolasbauw/bare86), a
 program that runs DOS programs, and Windows programs through HX, on Linux.
 
 Upstream is based on v2.24 (`198ec32`). Nothing else than what is listed under
-[What this fork changes](#what-this-fork-changes) differs from it. Four binaries
-differ from the official HX package (`DPMILD32.EXE`, `DGDI32.DLL`, `DUSER32.DLL`, `VESA32.DLL`) and one is added
+[What this fork changes](#what-this-fork-changes) differs from it. Five binaries
+differ from the official HX package (`DPMILD32.EXE`, `DGDI32.DLL`, `DUSER32.DLL`, `VESA32.DLL`, `WINMM.DLL`) and one is added
 (`MSVFW32.DLL`).
 
 ## What HX is
@@ -207,6 +207,30 @@ to `DefWindowProc`: a habit of Win16 and Windows 9x code, where GDI handles fit 
 `DefWindowProc` for `WM_ERASEBKGND`. Any other handle cut to 16 bits is still not recovered. Tested with
 `c/tests/win32/erase16.c` of [Bare86](https://github.com/nicolasbauw/bare86) (test `hx_erase16`).
 
+### 11. Small missing functions (DUSER32, DGDI32, WINMM)
+
+Programs that import these functions by name did not start (“Unable to load function”, “import not
+found”) or stopped when they called a function pointer that was NULL. Found by comparing the imports of 264 Win32 demos with the
+exports of the HX DLLs. Most of them have nothing to do in HX (there are no scroll bars, no caret, no MDI windows, no joystick):
+they return what a program that does not care expects.
+
+- **DUSER32** (`GetClipCursor` in `CURSOR.ASM`, the others in the new `Extras.asm`): `GetClipCursor` returns the rectangle
+  set by `ClipCursor`, or the screen; `FrameRect` draws a one pixel frame in the color of a brush; `GetDCEx` is `GetDC`;
+  `HideCaret`, `ShowCaret`, `ExcludeUpdateRgn`, `SetScrollInfo`, `GetScrollInfo`, `GetScrollPos`, `GetScrollRange`,
+  `ShowScrollBar`, `EnableScrollBar`, `DrawEdge`, `DrawFrameControl` (nothing is drawn), `CheckRadioButton`,
+  `SetMessageQueue`, `InsertMenuItemA`, `TranslateMDISysAccel`, `ActivateKeyboardLayout` (US English),
+  `BeginDeferWindowPos`/`DeferWindowPos`/`EndDeferWindowPos` (the windows are moved at once);
+  `DefDlgProcA`, `DefMDIChildProcA`, `DefFrameProcA` call `DefWindowProcA`; `CreateDialogIndirectParamA` returns NULL, like
+  `CreateDialogParamA`.
+- **DGDI32** (new `Extras.asm`): `GetBrushOrgEx`/`SetBrushOrgEx` (the origin is always 0,0), `CreatePenIndirect`
+  (through `CreatePen`), `GetBkMode`.
+- **WINMM**: `joySetThreshold`, `joyGetThreshold` (no joystick: `MMSYSERR_NODRIVER`, like the other `joy` functions),
+  `joyConfigChanged`, `waveOutSetPlaybackRate`, `waveOutGetPlaybackRate` (`MMSYSERR_NOTSUPPORTED`), `timeGetSystemTime`.
+
+Tested with `c/tests/win32/smallfuncs.c` of [Bare86](https://github.com/nicolasbauw/bare86) (test `hx_smallfuncs`), which imports
+them by name. Not done: the image lists of COMCTL32 (`ImageList_*`, needed by the programs that use MFC), `EnumFontsA`,
+the OLE functions `CoBuildVersion` and `IsEqualGUID`.
+
 ## Building
 
 HX's own build needs Open Watcom's `wmake` or `nmake`, JWasm, JWlink and a DOS or
@@ -220,6 +244,8 @@ build-linux/build-dgdi32.sh   [WORK_DIR]
 # result: WORK_DIR/dgdi32/out/DGDI32.DLL
 build-linux/build-duser32.sh  [WORK_DIR]     # needs wrc of Open Watcom (resources of DUSER32)
 # result: WORK_DIR/duser32/out/DUSER32.DLL
+build-linux/build-winmm.sh    [WORK_DIR]
+# result: WORK_DIR/winmm/out/WINMM.DLL (imports from SB16.DLL declared to the linker)
 build-linux/build-msvfw32.sh  [WORK_DIR]
 # result: WORK_DIR/msvfw32/out/MSVFW32.DLL
 build-linux/build-vesa32.sh   [WORK_DIR]
@@ -241,12 +267,12 @@ images with it as with the official DLL.
 
 The other parts of HX (HDPMI, the other DLLs) are **not** rebuilt by this fork: use
 the binaries of the [official packages](https://github.com/Baron-von-Riedesel/HX/releases)
-and replace `BIN/DPMILD32.EXE`, `BIN/DGDI32.DLL`, `BIN/DUSER32.DLL` and `BIN/VESA32.DLL` with the ones of this fork's releases, and add `BIN/MSVFW32.DLL` (HX has none).
+and replace `BIN/DPMILD32.EXE`, `BIN/DGDI32.DLL`, `BIN/DUSER32.DLL`, `BIN/VESA32.DLL` and `BIN/WINMM.DLL` with the ones of this fork's releases, and add `BIN/MSVFW32.DLL` (HX has none).
 
 ## Use with Bare86
 
 [Bare86](https://github.com/nicolasbauw/bare86) downloads the official HX package on
-first use and checks its SHA-256. The fork's `DPMILD32.EXE`, `DGDI32.DLL`, `DUSER32.DLL` and `VESA32.DLL` replace the official
+first use and checks its SHA-256. The fork's `DPMILD32.EXE`, `DGDI32.DLL`, `DUSER32.DLL`, `VESA32.DLL` and `WINMM.DLL` replace the official
 ones in the same directory; both can be told apart by their SHA-256, given in each
 release's notes.
 

@@ -45,4 +45,5 @@
 .\wsprintf.ASM \
 .\wsprntfw.ASM \
 .\wvsprntf.ASM \
-.\wvsprtfw.ASM
+.\wvsprtfw.ASM \
+.\Extras.ASM

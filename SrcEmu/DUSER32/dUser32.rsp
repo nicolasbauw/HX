@@ -335,4 +335,30 @@ EXPORT {
  wsprintfW
  wvsprintfA
  wvsprintfW
+ HideCaret
+ ShowCaret
+ FrameRect
+ GetDCEx
+ ExcludeUpdateRgn
+ SetScrollInfo
+ GetScrollInfo
+ GetScrollPos
+ GetScrollRange
+ ShowScrollBar
+ EnableScrollBar
+ DrawEdge
+ DrawFrameControl
+ CheckRadioButton
+ DefDlgProcA
+ CreateDialogIndirectParamA
+ SetMessageQueue
+ InsertMenuItemA
+ DefMDIChildProcA
+ DefFrameProcA
+ TranslateMDISysAccel
+ ActivateKeyboardLayout
+ BeginDeferWindowPos
+ DeferWindowPos
+ EndDeferWindowPos
+ GetClipCursor
 }

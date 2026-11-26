@@ -42,4 +42,5 @@
 .\Stretch.ASM \
 .\TextOut.ASM \
 .\ViewPort.ASM \
-.\Window.ASM
+.\Window.ASM \
+.\Extras.ASM
