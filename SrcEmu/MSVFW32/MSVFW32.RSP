@@ -1,0 +1,18 @@
+#LIBRARY MSVFW32
+OPTION MODNAME=MSVFW32
+EXPORT {
+ DrawDibOpen
+ DrawDibClose
+ DrawDibBegin
+ DrawDibEnd
+ DrawDibDraw
+ DrawDibGetPalette
+ DrawDibSetPalette
+ DrawDibRealize
+ DrawDibChangePalette
+ DrawDibStart
+ DrawDibStop
+ DrawDibTime
+ DrawDibProfileDisplay
+ DrawDibGetBuffer
+}

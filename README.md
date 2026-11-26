@@ -7,7 +7,8 @@ program that runs DOS programs, and Windows programs through HX, on Linux.
 
 Upstream is based on v2.24 (`198ec32`). Nothing else than what is listed under
 [What this fork changes](#what-this-fork-changes) differs from it. Four binaries
-differ from the official HX package: `DPMILD32.EXE`, `DGDI32.DLL`, `DUSER32.DLL` and `VESA32.DLL`.
+differ from the official HX package (`DPMILD32.EXE`, `DGDI32.DLL`, `DUSER32.DLL`, `VESA32.DLL`) and one is added
+(`MSVFW32.DLL`).
 
 ## What HX is
 
@@ -174,6 +175,23 @@ need real controls will not do much. Tested with `c/tests/win32/dialog.c` of
 [Bare86](https://github.com/nicolasbauw/bare86) (test `hx_dialog`): OK, cancel only, close only, never ends,
 nested, message to the own window.
 
+### 9. `MSVFW32.DLL`, the DrawDib functions of Video for Windows (new DLL)
+
+**Symptom.** Some demos load `MSVFW32.DLL` and call `DrawDibOpen`/`DrawDibDraw` through `GetProcAddress`.
+HX has no such DLL: `LoadLibrary` fails, the function pointer stays NULL, and the call jumps to
+address 0, where the interrupt vector table is executed as code until the first invalid
+instruction (the exception is reported at address `0x13`).
+
+**Change.** New `SrcEmu/MSVFW32/MSVFW32.ASM`: `DrawDibOpen`, `DrawDibClose`, `DrawDibBegin`, `DrawDibEnd`,
+`DrawDibDraw`, `DrawDibGetPalette`, `DrawDibSetPalette`, `DrawDibRealize`, `DrawDibChangePalette`, `DrawDibStart`,
+`DrawDibStop`, `DrawDibTime`, `DrawDibProfileDisplay`, `DrawDibGetBuffer`. `DrawDibDraw` draws through
+`StretchDIBits` (which scales, item 5): sizes of -1 mean the size of the bitmap, `lpBits` may be NULL (the
+bits follow the header and the color table), and the origin of the source rectangle is its upper left corner,
+as documented (`StretchDIBits` counts from the lower left corner of a bottom-up bitmap: converted). The
+other functions only keep a program that asks for a handle going. The compression functions (`IC...`), video
+capture and AVI are **not** provided. Tested with `c/tests/win32/drawdib.c` of
+[Bare86](https://github.com/nicolasbauw/bare86) (test `hx_drawdib`); the 64k intro `cashcow` runs with it.
+
 ## Building
 
 HX's own build needs Open Watcom's `wmake` or `nmake`, JWasm, JWlink and a DOS or
@@ -187,6 +205,8 @@ build-linux/build-dgdi32.sh   [WORK_DIR]
 # result: WORK_DIR/dgdi32/out/DGDI32.DLL
 build-linux/build-duser32.sh  [WORK_DIR]     # needs wrc of Open Watcom (resources of DUSER32)
 # result: WORK_DIR/duser32/out/DUSER32.DLL
+build-linux/build-msvfw32.sh  [WORK_DIR]
+# result: WORK_DIR/msvfw32/out/MSVFW32.DLL
 build-linux/build-vesa32.sh   [WORK_DIR]
 # result: WORK_DIR/vesa32/out/VESA32.DLL (same size as the official one when built from the unmodified sources)
 ```
@@ -206,7 +226,7 @@ images with it as with the official DLL.
 
 The other parts of HX (HDPMI, the other DLLs) are **not** rebuilt by this fork: use
 the binaries of the [official packages](https://github.com/Baron-von-Riedesel/HX/releases)
-and replace `BIN/DPMILD32.EXE`, `BIN/DGDI32.DLL`, `BIN/DUSER32.DLL` and `BIN/VESA32.DLL` with the ones of this fork's releases.
+and replace `BIN/DPMILD32.EXE`, `BIN/DGDI32.DLL`, `BIN/DUSER32.DLL` and `BIN/VESA32.DLL` with the ones of this fork's releases, and add `BIN/MSVFW32.DLL` (HX has none).
 
 ## Use with Bare86
 
