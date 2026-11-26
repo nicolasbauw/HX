@@ -192,6 +192,21 @@ other functions only keep a program that asks for a handle going. The compressio
 capture and AVI are **not** provided. Tested with `c/tests/win32/drawdib.c` of
 [Bare86](https://github.com/nicolasbauw/bare86) (test `hx_drawdib`); the 64k intro `cashcow` runs with it.
 
+### 10. `DefWindowProc` recovers a device context cut to 16 bits (DUSER32)
+
+**Symptom.** Some demos crashed in `gdi32.dll` (`exception C0000005`, access to `F0000140`) as soon as their window
+had to be erased (`haetten`, `yxskaft`, `obs_dp`).
+
+**Cause.** The window procedure of these programs cuts `wParam` to 16 bits (`and eax,0FFFFh`) before passing it
+to `DefWindowProc`: a habit of Win16 and Windows 9x code, where GDI handles fit in 16 bits. For `WM_ERASEBKGND`
+`wParam` is the device context, and in HX a handle is the 32 bit address of an object: `DefWindowProc` got
+`0x30` instead of `0x00AB0030` and `PatBlt` read the object at address `0x30`.
+
+**Change.** `SrcEmu/DUSER32/DCStuff.ASM`: `GetDC` keeps the last eight device contexts it gave out;
+`_RecoverDC` returns the whole handle for a value below `0x10000` that is the low word of one of them. Used by
+`DefWindowProc` for `WM_ERASEBKGND`. Any other handle cut to 16 bits is still not recovered. Tested with
+`c/tests/win32/erase16.c` of [Bare86](https://github.com/nicolasbauw/bare86) (test `hx_erase16`).
+
 ## Building
 
 HX's own build needs Open Watcom's `wmake` or `nmake`, JWasm, JWlink and a DOS or

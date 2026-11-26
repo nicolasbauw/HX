@@ -36,6 +36,11 @@ endif
 
 g_dccache	DCCACHEITEM ?DCITEMS dup (<0,0>)
 
+;--- the device contexts given out by GetDC() lately, for _RecoverDC()
+?DCRECENT	equ 8
+g_dcrecent	dd ?DCRECENT dup (0)
+g_dcrecentpos	dd 0
+
 g_bInit	db 0
 
 	.CODE
@@ -176,6 +181,38 @@ _CreateDC endp
 
 SetDCOrgEx proto :DWORD, :DWORD, :DWORD
 
+;--- some programs keep a handle in a WORD (a habit of Win16 and Win9x, where handles fit in 16 bits) and pass it
+;--- on, e.g. the wParam of WM_ERASEBKGND to DefWindowProc: here a handle is a 32 bit address.
+;--- given the low 16 bits of a device context given out by GetDC() lately, return the whole handle
+;--- (a value that is not below 10000h, or no known device context: unchanged)
+
+_RecoverDC proc public uses ebx hdc:DWORD
+
+	mov eax, hdc
+	cmp eax, 10000h
+	jae done
+	test eax, eax
+	jz done
+	mov ecx, ?DCRECENT
+	mov edx, offset g_dcrecent
+nextdc:
+	mov ebx, [edx]
+	and ebx, 0FFFFh
+	cmp ebx, eax
+	jnz @F
+	cmp dword ptr [edx], 10000h
+	jb @F
+	mov eax, [edx]
+	jmp done
+@@:
+	add edx, 4
+	dec ecx
+	jnz nextdc
+done:
+	ret
+	align 4
+_RecoverDC endp
+
 GetDC proc public uses ebx hWnd:DWORD
 
 	mov ebx, offset g_dccache
@@ -234,6 +271,11 @@ found:
 		invoke SelectObject, ebx, eax
 	.endif
 	invoke SetSystemPaletteUse, ebx, SYSPAL_STATIC
+	mov eax, g_dcrecentpos
+	mov [g_dcrecent+eax*4], ebx
+	inc eax
+	and eax, ?DCRECENT-1
+	mov g_dcrecentpos, eax
 	mov eax, ebx
 exit:
 	@strace	<"GetDC(", hWnd, ")=", eax>

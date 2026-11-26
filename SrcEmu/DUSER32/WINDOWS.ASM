@@ -1056,6 +1056,8 @@ exit:
 	align 4
 ShowWindowAsync endp
 
+_RecoverDC proto stdcall :dword
+
 DefWindowProcA proc public uses ebx hWnd:dword,message:dword,wParam:dword,lParam:dword
 
 		@strace <"DefWindowProc(", hWnd, ", ", message, ", ", wParam, ", ", lParam, ") enter">
@@ -1163,6 +1165,9 @@ endif
 		.endif
 		retn
 is_erasebkgnd:
+		invoke _RecoverDC, wParam	;a program may have cut the handle to 16 bits
+		mov wParam, eax
+		mov ecx, hWnd
 		xor eax, eax
 		test [ecx].WNDOBJ.dwStyle, WS_VISIBLE
 		jz @F
