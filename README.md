@@ -75,8 +75,8 @@ under Bare86's emulated PC. Reports from real machines are welcome.
 ### 2. `SetDIBits` copies the lines it is given (DGDI32)
 
 **Symptom.** Some programs stop with `exception C0000005` in `gdi32.dll`, reading
-past the end of a buffer (found with the intro `3s-money`, and `haetten`,
-`WURST!!` among a collection of Win32 demos).
+past the end of a buffer (found with the 64k intro `3s-money`, among a collection of
+Win32 demos; two others fault in `gdi32.dll` for other reasons, not fixed here).
 
 **Cause.** `SetDIBits(hdc, hbm, uStartScan, cScanLines, lpvBits, lpbmi, usage)`
 receives `cScanLines` lines in `lpvBits`, the first one being scan line
