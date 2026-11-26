@@ -98,6 +98,7 @@ DGROUP group _TEXT,CCONST,_DATA,_ITEXT,_BSS,STACK
 ?FLATES 		equ 0	;std=1, 1=set es to flat when calling dll entries 
 ?CALLDLLENTRY1TIME	equ 0	;call dll entry only 1 time (like win16 dlls)
 ?CLEARHEADER	equ 1	;std=1, 1=clear PE header after allocation
+NTOFS		equ 600h	;offset of the loader's own copy of the NT headers (faithful header below)
 ?LDRHEAP		equ 1	;std=1, 1=create a small loader heap in free area of first
 						;       page to save referenced module handles by current app
 ?SEARCHMODINIMP equ 1	;std=1, 1=search module in list in DoImport
@@ -306,7 +307,7 @@ nomsg:
 ScanImportsDir proc uses esi edi ebx
 
 	mov ebx,esi
-	add esi,[esi].MZHDR.ofsPEhdr
+	add esi,NTOFS
 	mov ecx,[esi].IMAGE_NT_HEADERS.OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT*sizeof IMAGE_DATA_DIRECTORY].Size_
 	jecxz exit
 	mov edi,[esi].IMAGE_NT_HEADERS.OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT*sizeof IMAGE_DATA_DIRECTORY].VirtualAddress
@@ -392,7 +393,7 @@ SearchMod32_1:				;<----
 	and esi,esi
 	jz SearchMod32_er
 	mov eax, esi
-	add eax, [esi].MZHDR.ofsPEhdr
+	add eax, NTOFS
 	test [eax].IMAGE_NT_HEADERS.FileHeader.Characteristics,IMAGE_FILE_DLL
 	jz SearchMod32_2			;ignore apps
 	mov edi,[esi].MZHDR.pExeNam
@@ -421,7 +422,7 @@ if ?CHECKCROSSREFS
 endif
 @@:
 	@printf <"SearchPEModule: module found, handle=%lX",lf>, esi
-	add esi,[esi].MZHDR.ofsPEhdr
+	add esi,NTOFS
 if ?LFN
 	pop esp
 	clc
@@ -784,7 +785,8 @@ allocok:
 	rep stos dword ptr [edi]
 	pop edi
   endif
-	mov edx, edi
+	lea edx, [edi - sizeof MZHDR + NTOFS]
+	mov edi, edx
 	mov esi, esp
 	mov cx, sizeof IMAGE_FILE_HEADER+4
 	add cx, [esi].IMAGE_NT_HEADERS.FileHeader.SizeOfOptionalHeader
@@ -793,6 +795,48 @@ allocok:
 	push es
 	pop ds
 	mov bx, [ebp].LM32FR.hFile
+;--- faithful header: the first NTOFS bytes of the file are what the program sees at its
+;--- base (Petite checks them); the loader works on its own copy of the NT headers at base+NTOFS.
+;--- Fields 20h-3Bh of the MZ header belong to the loader. If the PE header is too far
+;--- (e_lfanew > 300h), the header is not kept and e_lfanew points to the loader's copy.
+	mov eax, [edx - NTOFS + 3Ch]
+	cmp eax, 40h
+	jb @F
+	cmp eax, 300h
+	ja @F
+	push eax
+	push edx
+	push edi
+	xor cx, cx
+	xor dx, dx
+	mov ax, 4200h
+	int 21h
+	mov edx, [esp+4]
+	sub edx, NTOFS
+	mov ecx, NTOFS
+	mov ah, 3Fh
+	int 21h
+	mov edi, [esp+4]
+	sub edi, NTOFS - 20h
+	xor eax, eax
+	mov ecx, 7
+	rep stos dword ptr [edi]
+	mov edx, [esp+4]
+	movzx ecx, [edx].IMAGE_NT_HEADERS.FileHeader.SizeOfOptionalHeader
+	mov eax, [esp+8]
+	lea eax, [eax+ecx+4+sizeof IMAGE_FILE_HEADER]
+	mov dx, ax
+	shr eax, 16
+	mov cx, ax
+	mov ax, 4200h
+	int 21h
+	pop edi
+	pop edx
+	pop eax
+	jmp hdrdone
+@@:
+	mov dword ptr [edx - NTOFS + 3Ch], NTOFS
+hdrdone:
 endif	;?USESTACK
 
 ;--------------------------------- now read object table
@@ -811,10 +855,9 @@ endif	;?USESTACK
 	jnz error53
 
 	@printf <"LoadPEModule: reading object table done, size=%lX",lf>, eax
-	lea eax, [eax+edi+sizeof MZHDR]
+	lea eax, [eax+edi+NTOFS]
 	sub eax, edx
-	mov [edx - sizeof MZHDR].MZHDR.pExeNam, eax 	;is a RVA
-	mov [edx - sizeof MZHDR].MZHDR.ofsPEhdr, sizeof MZHDR
+	mov [edx - NTOFS].MZHDR.pExeNam, eax 	;is a RVA
 
 ;----------------------------- alloc space for total image
 
@@ -842,7 +885,7 @@ ife ?USESTACK
 	pop eax
 	mov [ebp].LM32FR.xmemadr, eax
 else
-	lea eax, [edx-sizeof MZHDR]
+	lea eax, [edx-NTOFS]
 endif
 ;----------------------------- save module name
 
@@ -851,7 +894,7 @@ endif
 
 	mov edi, eax
 
-	add edi, [edx - sizeof MZHDR].MZHDR.pExeNam
+	add edi, [edx - NTOFS].MZHDR.pExeNam
 	push ds
 	lds esi, [ebp].LM32FR.szExePath
 nextchar0:
@@ -872,7 +915,7 @@ nextchar:
 	call checkandreplace 				;preserves all registers
 	add edi,8							;let some free place here!
 if ?LDRHEAP
-	mov [edx.MZHDR.pModuleList - sizeof MZHDR],edi	;will be module list
+	mov [edx.MZHDR.pModuleList - NTOFS],edi	;will be module list
 endif
 
 	mov esi, edx
@@ -919,18 +962,18 @@ if ?EXTRASTACKHDL
 	mov ax,0501h
 	int 31h
 	jc error1_2
-	mov word ptr [edx - sizeof MZHDR+0].MZHDR.hStack,di
-	mov word ptr [edx - sizeof MZHDR+2].MZHDR.hStack,si
+	mov word ptr [edx - NTOFS+0].MZHDR.hStack,di
+	mov word ptr [edx - NTOFS+2].MZHDR.hStack,si
 	mov esi, edx
 	push bx
 	push cx
 	pop edi
-	mov [edx - sizeof MZHDR].MZHDR.dwStack,edi
+	mov [edx - NTOFS].MZHDR.dwStack,edi
   if ?ADDTOSTACK		;uncommit the pages below the "reserved" part
 	push esi
 	push es
 	mov edi,esp
-	mov esi,[esi - sizeof MZHDR].MZHDR.hStack
+	mov esi,[esi - NTOFS].MZHDR.hStack
 	xor ebx,ebx
 ;	mov ebx,?ADDTOSTACK-1000h	;offset in memory block
 	push ss
@@ -967,7 +1010,7 @@ endif
 
 	push ds
 	pushad
-	lea eax,[esi-sizeof MZHDR]		;hModule
+	lea eax,[esi-NTOFS]		;hModule
 	@printf <"LoadPEModule: load PE app, handle=%lX",lf>, eax
 	mov ds,cs:[wLdrDS]
 	mov si,[wTDStk]
@@ -1006,12 +1049,12 @@ isdll:
 
 	push ds
 	mov ds,cs:[wLdrDS]
-	lea eax,[esi-sizeof MZHDR]
+	lea eax,[esi-NTOFS]
 	xchg eax,ds:[dwMod32]
 	pop ds
-	mov [esi.MZHDR.pNxtMod - sizeof MZHDR],eax
+	mov [esi.MZHDR.pNxtMod - NTOFS],eax
 	mov eax, [ebp].LM32FR.xmemhdl
-	mov [esi.MZHDR.hImage - sizeof MZHDR],eax
+	mov [esi.MZHDR.hImage - NTOFS],eax
 	clc
 if ?USESTACK
 	mov esp, [ebp].LM32FR.xmemadr
@@ -1088,7 +1131,7 @@ if ?CALLDLLENTRY1TIME eq 0
 if ?LDRHEAP
 SearchModuleInAppModList proc
 
-	lea edx, [esi - sizeof MZHDR]
+	lea edx, [esi - NTOFS]
 	mov si, cs:[wTDStk]
 	cmp si,offset starttaskstk
 	jz notfound
@@ -1203,13 +1246,13 @@ getstacktop proc
 	jz notask
 	mov edx, cs:[eax-sizeof TASK].TASK.dwModul
 	mov eax, [edx].MZHDR.dwStack
-	add eax, [edx+sizeof MZHDR].IMAGE_NT_HEADERS.OptionalHeader.SizeOfStackReserve
+	add eax, [edx+NTOFS].IMAGE_NT_HEADERS.OptionalHeader.SizeOfStackReserve
 if ?ADDTOSTACK
 	add eax,?ADDTOSTACK
 endif
 	ret
 notask:
-	mov eax, [esi - size MZHDR].MZHDR.dwStack
+	mov eax, [esi - NTOFS].MZHDR.dwStack
 	add eax, [esi].IMAGE_NT_HEADERS.OptionalHeader.SizeOfStackReserve
 if ?ADDTOSTACK
 	add eax,?ADDTOSTACK
@@ -1252,14 +1295,14 @@ endif
 
 InitPEModule proc
 if ?CHECKCROSSREFS
-	test [esi-sizeof MZHDR].MZHDR.bFlags, FPE_CROSSREF
+	test [esi-NTOFS].MZHDR.bFlags, FPE_CROSSREF
 	jnz exit
 endif
-	inc [esi-sizeof MZHDR].MZHDR.wCnt	;increment counter 
+	inc [esi-NTOFS].MZHDR.wCnt	;increment counter 
 	@printf <"InitPEModule, handle=%lX">, esi
 if _TRACE_
 	@trace_s <" ">
-	lea ebx,[esi-sizeof MZHDR]
+	lea ebx,[esi-NTOFS]
 	call modulenameout
 endif
 ;;	@trace_s lf
@@ -1270,15 +1313,15 @@ if ?EARLYMODLISTUPDATE
 	call AddModuleToAppModList
 	jnc exit				;jump if it is already in there
 endif
-	cmp [esi - sizeof MZHDR].MZHDR.wCnt,1
+	cmp [esi - NTOFS].MZHDR.wCnt,1
 	jnz imports_done
 if ?CHECKCROSSREFS
-	or [esi - sizeof MZHDR].MZHDR.bFlags, FPE_CROSSREF
+	or [esi - NTOFS].MZHDR.bFlags, FPE_CROSSREF
 endif
 	call DoImports	   ;now resolve all imports
 if ?CHECKCROSSREFS		  
 	pushf
-	and [esi - sizeof MZHDR].MZHDR.bFlags,not FPE_CROSSREF
+	and [esi - NTOFS].MZHDR.bFlags,not FPE_CROSSREF
 	popf
 endif
 	jc error_imports_dll   
@@ -1334,7 +1377,7 @@ if ?FLATES
 endif
 	mov cx, cs:[wFlatCS]
 	mov ebx, [esi].IMAGE_NT_HEADERS.OptionalHeader.AddressOfEntryPoint
-	lea edx, [esi - sizeof MZHDR]
+	lea edx, [esi - NTOFS]
 	add ebx, edx
 if ?INT41SUPPORT
 	mov ax,DS_LOADDLL+100h			;"dll loading"
@@ -1388,7 +1431,7 @@ endif
 	mov edi,esp
 	push ds
 	pop es
-	mov eax, [esi-sizeof MZHDR].MZHDR.dwStack
+	mov eax, [esi-NTOFS].MZHDR.dwStack
 	add eax, [esi].IMAGE_NT_HEADERS.OptionalHeader.SizeOfStackReserve
   if ?ADDTOSTACK
 	add eax,?ADDTOSTACK
@@ -1437,7 +1480,7 @@ endif
 	mov cx,cs:[wFlatCS]
 	mov ebx,[esi].IMAGE_NT_HEADERS.OptionalHeader.AddressOfEntryPoint
 
-	lea esi, [esi-sizeof MZHDR]
+	lea esi, [esi-NTOFS]
 	add ebx,esi
 if 0
 ;--- this was an ugly hack, to terminate the serialization of the init phase
@@ -1520,7 +1563,7 @@ error_imports_dll:
 error2:
 if 1
 	push ax
-	lea eax, [esi - sizeof MZHDR]
+	lea eax, [esi - NTOFS]
 	call FreeModule32
 	pop ax
 endif
@@ -1528,7 +1571,7 @@ error1:					;TIBSel not allocated????
 error:
 	stc
 exit:
-	lea esi,[esi-sizeof MZHDR]
+	lea esi,[esi-NTOFS]
 	ret
 InitPEModule endp
 
@@ -1562,8 +1605,8 @@ if ?INT41SUPPORT
 	mov [ebp].D386_Device_Params.DD_logical_seg,0
 	mov dword ptr [ebp].D386_Device_Params.DD_name,0
 	mov word ptr [ebp].D386_Device_Params.DD_name+4,0
-	mov edi, [esi.MZHDR.pExeNam - sizeof MZHDR]
-	lea edi, [edi + esi - sizeof MZHDR]
+	mov edi, [esi.MZHDR.pExeNam - NTOFS]
+	lea edi, [edi + esi - NTOFS]
 	call skippath
 	mov dword ptr [ebp].D386_Device_Params.DD_sym_name,edi
 	mov word ptr [ebp].D386_Device_Params.DD_sym_name+4,ds
@@ -1595,7 +1638,7 @@ endif
 	shr ecx, 2
 	push edi
 	mov edi,[edi].IMAGE_SECTION_HEADER.VirtualAddress
-	lea edi,[edi + esi - sizeof MZHDR]
+	lea edi,[edi + esi - NTOFS]
 	mov edx,edi
 	xor eax, eax
 	rep stos dword ptr [edi]
@@ -1638,7 +1681,7 @@ if ?INT41SUPPORT
 @@:
 	mov [ebp].D386_Device_Params.DD_actual_sel, ax
 	mov eax,[edi].IMAGE_SECTION_HEADER.VirtualAddress
-	lea eax,[eax + esi - sizeof MZHDR]
+	lea eax,[eax + esi - NTOFS]
 	mov [ebp].D386_Device_Params.DD_base, eax
 	call getsectionsize
 	mov [ebp].D386_Device_Params.DD_length, ecx
@@ -1722,7 +1765,7 @@ endif
 			rep stos word ptr [edi]
 			mov ecx, edx	;ecx=number of pages
 			mov edx, esp	;es:edx=page attributes
-			mov esi, [esi.MZHDR.hImage - sizeof MZHDR]
+			mov esi, [esi.MZHDR.hImage - NTOFS]
 			mov ax, 0507h
 			int 31h
 			mov esp, edi
@@ -1827,7 +1870,7 @@ SearchExportByName endp
 SearchExport proc uses esi edi
 
 	push ebx
-	lea ebx,[esi-sizeof MZHDR]
+	lea ebx,[esi-NTOFS]
 	mov edi,[esi].IMAGE_NT_HEADERS.OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT*sizeof IMAGE_DATA_DIRECTORY].VirtualAddress
 	add edi,ebx
 	test eax,80000000h			;import by number?
@@ -1893,7 +1936,7 @@ stringout32 endp
 ResolveImports proc uses edi esi
 
 	mov esi,eax
-	add esi,sizeof MZHDR
+	add esi,NTOFS
 	mov ecx,[edi].IMAGE_IMPORT_DESCRIPTOR.OriginalFirstThunk	;array of pointers (name)
 	mov edx,[edi].IMAGE_IMPORT_DESCRIPTOR.FirstThunk	;array of pointers
 ;--------------------------------------- borland PEs miss the ilt
@@ -1977,7 +2020,7 @@ else
 	jecxz exit
 endif
 	mov edi,[esi].IMAGE_NT_HEADERS.OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT*sizeof IMAGE_DATA_DIRECTORY].VirtualAddress
-	lea ebx,[esi-sizeof MZHDR]
+	lea ebx,[esi-NTOFS]
 	add edi,ebx
 	@printf <"DoImports ebx=%lX",lf>, ebx
 	.while (1)
@@ -2070,7 +2113,7 @@ DoFixups proc uses edi esi ebx ebp
 
 	@trace_s <"DoFixups start",lf>
 
-	lea edx,[esi-sizeof MZHDR]	;module base to edx
+	lea edx,[esi-NTOFS]	;module base to edx
 	test [esi].IMAGE_NT_HEADERS.FileHeader.Characteristics,IMAGE_FILE_RELOCS_STRIPPED
 	jz @F
 	cmp ebx,edx 				;if relocs are stripped, check		
@@ -2409,7 +2452,7 @@ GetProcAddress32 proc uses ds es
 	invoke SearchModuleInList
 	pop edx
 	jc error
-	mov edi,[ebx].IMAGE_NT_HEADERS.OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT*sizeof IMAGE_DATA_DIRECTORY].VirtualAddress+sizeof MZHDR
+	mov edi,[ebx].IMAGE_NT_HEADERS.OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT*sizeof IMAGE_DATA_DIRECTORY].VirtualAddress+NTOFS
 	and edi,edi
 	jz  error		;no export directory?
 	add edi,ebx
@@ -2549,10 +2592,10 @@ endif
 
 IsReferenced proc uses edx edi
 
-	mov edx,[eax+sizeof MZHDR].IMAGE_NT_HEADERS.OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT*sizeof IMAGE_DATA_DIRECTORY].Size_
+	mov edx,[eax+NTOFS].IMAGE_NT_HEADERS.OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT*sizeof IMAGE_DATA_DIRECTORY].Size_
 	and edx, edx
 	jz notreferenced
-	mov edi,[eax+sizeof MZHDR].IMAGE_NT_HEADERS.OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT*sizeof IMAGE_DATA_DIRECTORY].VirtualAddress
+	mov edi,[eax+NTOFS].IMAGE_NT_HEADERS.OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT*sizeof IMAGE_DATA_DIRECTORY].VirtualAddress
 	add edi,eax
 	.while (edx)
 		.break .if (![edi].IMAGE_IMPORT_DESCRIPTOR.Name_)
@@ -2685,7 +2728,7 @@ endif
 if _TRACE_
 	call modulenameout
 endif
-	lea esi,[ebx+sizeof MZHDR]
+	lea esi,[ebx+NTOFS]
 	test [esi.IMAGE_NT_HEADERS.FileHeader.Characteristics],IMAGE_FILE_DLL
 	jnz FreeDll32
 ife ?EARLYMODLISTUPDATE
@@ -2826,7 +2869,7 @@ if 1
 	add edi,ebx
 	call skippath
 endif
-	mov cx,[ebx.IMAGE_NT_HEADERS.FileHeader.NumberOfSections]+sizeof MZHDR
+	mov cx,[ebx.IMAGE_NT_HEADERS.FileHeader.NumberOfSections]+NTOFS
 	push bx
 	xor bx,bx				;segment #
 @@:
@@ -2841,7 +2884,7 @@ endif
 if 0
 	test cs:fMode, FMODE_DOSEMU
 	jz @F
-	mov ecx, [ebx+sizeof MZHDR].IMAGE_NT_HEADERS.OptionalHeader.SizeOfImage
+	mov ecx, [ebx+NTOFS].IMAGE_NT_HEADERS.OptionalHeader.SizeOfImage
 	shr ecx, 12
 	mov edi, esp
 	mov edx, ecx
@@ -3215,8 +3258,8 @@ savepathPE proc uses es esi
 
 	mov es, cs:[wLdrDS]
 	mov di, offset szPath
-	mov edx, [esi.MZHDR.pExeNam - sizeof MZHDR]
-	lea esi, [esi+edx - sizeof MZHDR]
+	mov edx, [esi.MZHDR.pExeNam - NTOFS]
+	lea esi, [esi+edx - NTOFS]
 savepath0:
 	mov dx,di
 savepath1:
