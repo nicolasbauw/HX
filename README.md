@@ -6,8 +6,8 @@ carries a few fixes needed by [Bare86](https://github.com/nicolasbauw/bare86), a
 program that runs DOS programs, and Windows programs through HX, on Linux.
 
 Upstream is based on v2.24 (`198ec32`). Nothing else than what is listed under
-[What this fork changes](#what-this-fork-changes) differs from it. Three binaries
-differ from the official HX package: `DPMILD32.EXE`, `DGDI32.DLL` and `VESA32.DLL`.
+[What this fork changes](#what-this-fork-changes) differs from it. Four binaries
+differ from the official HX package: `DPMILD32.EXE`, `DGDI32.DLL`, `DUSER32.DLL` and `VESA32.DLL`.
 
 ## What HX is
 
@@ -156,6 +156,22 @@ variable `g_bPalPE`) that the table is a `PALETTEENTRY` table; DIB color tables 
 memory DCs (`RGBQUAD`) are handled as before. Together with item 6, a 4×4 picture with
 a red, a green, a blue and a white corner shows pure red, green, blue and white.
 
+### 8. Modal dialog boxes run (DUSER32)
+
+**Symptom.** A program that opens a dialog box (`DialogBoxParam`, `DialogBoxIndirectParam`:
+the “run in full screen?” or options box of a demo, a launcher) stopped on a grey box saying
+`DialogBoxParam(41) called`, the function being a stub.
+
+**Change.** `SrcEmu/DUSER32/Dlgbox.asm`: there is still no dialog manager (no template is read, no
+control is created), but the dialog procedure now gets what a user who accepts the defaults would
+produce: `WM_INITDIALOG` (with the initialization parameter), then `WM_COMMAND` with `IDOK`, then
+`IDCANCEL`, then `WM_CLOSE`, until it calls `EndDialog`; the dialog function returns the value passed
+to `EndDialog` (1, `IDOK`, if the procedure never ends the dialog, so that nothing stays blocked). `EndDialog`
+works, with nested dialogs. The window handle of the dialog is an opaque handle: `GetDlgItem` and the other
+functions of the dialogs still return 0, as before, and procedures that need real controls will not do much.
+Tested with `c/tests/win32/dialog.c` of [Bare86](https://github.com/nicolasbauw/bare86)
+(test `hx_dialog`): OK, cancel only, close only, never ends, nested.
+
 ## Building
 
 HX's own build needs Open Watcom's `wmake` or `nmake`, JWasm, JWlink and a DOS or
@@ -167,6 +183,8 @@ build-linux/build-dpmild32.sh [WORK_DIR]     # default WORK_DIR: /tmp/hx-build
 # result: WORK_DIR/b/ldr/out/DPMILD32.EXE
 build-linux/build-dgdi32.sh   [WORK_DIR]
 # result: WORK_DIR/dgdi32/out/DGDI32.DLL
+build-linux/build-duser32.sh  [WORK_DIR]     # needs wrc of Open Watcom (resources of DUSER32)
+# result: WORK_DIR/duser32/out/DUSER32.DLL
 build-linux/build-vesa32.sh   [WORK_DIR]
 # result: WORK_DIR/vesa32/out/VESA32.DLL (same size as the official one when built from the unmodified sources)
 ```
@@ -186,12 +204,12 @@ images with it as with the official DLL.
 
 The other parts of HX (HDPMI, the other DLLs) are **not** rebuilt by this fork: use
 the binaries of the [official packages](https://github.com/Baron-von-Riedesel/HX/releases)
-and replace `BIN/DPMILD32.EXE`, `BIN/DGDI32.DLL` and `BIN/VESA32.DLL` with the ones of this fork's releases.
+and replace `BIN/DPMILD32.EXE`, `BIN/DGDI32.DLL`, `BIN/DUSER32.DLL` and `BIN/VESA32.DLL` with the ones of this fork's releases.
 
 ## Use with Bare86
 
 [Bare86](https://github.com/nicolasbauw/bare86) downloads the official HX package on
-first use and checks its SHA-256. The fork's `DPMILD32.EXE`, `DGDI32.DLL` and `VESA32.DLL` replace the official
+first use and checks its SHA-256. The fork's `DPMILD32.EXE`, `DGDI32.DLL`, `DUSER32.DLL` and `VESA32.DLL` replace the official
 ones in the same directory; both can be told apart by their SHA-256, given in each
 release's notes.
 

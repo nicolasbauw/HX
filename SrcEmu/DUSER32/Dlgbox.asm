@@ -17,16 +17,71 @@ endif
 
 		.DATA
 
+;--- modal dialogs run without a dialog manager: there are no controls, no template is read.
+;--- the dialog procedure gets WM_INITDIALOG, then WM_COMMAND with IDOK (as if the user
+;--- accepted the defaults), then IDCANCEL, then WM_CLOSE, until it calls EndDialog().
+;--- the "window handle" of the dialog is a pointer to a DLGSTATE on the stack of the caller.
+
+DLGSTATE struct
+pPrev		dd ?		;enclosing modal dialog
+bEnded		dd ?
+dwRC		dd ?
+DLGSTATE ends
+
+g_pDlg		dd 0		;innermost modal dialog
+
 		.code
+
+_RunDialog proc uses ebx lpDialogProc:dword, dwInitParm:dword
+
+local	dlg:DLGSTATE
+
+		mov eax, g_pDlg
+		mov dlg.pPrev, eax
+		mov dlg.bEnded, 0
+		mov dlg.dwRC, 1		;IDOK if the procedure never calls EndDialog
+		lea ebx, dlg
+		mov g_pDlg, ebx
+		.if (lpDialogProc)
+			push dwInitParm
+			push 0			;wParam: the control that gets the focus
+			push WM_INITDIALOG
+			push ebx
+			call lpDialogProc
+			.if (!dlg.bEnded)
+				push 0
+				push IDOK
+				push WM_COMMAND
+				push ebx
+				call lpDialogProc
+			.endif
+			.if (!dlg.bEnded)
+				push 0
+				push IDCANCEL
+				push WM_COMMAND
+				push ebx
+				call lpDialogProc
+			.endif
+			.if (!dlg.bEnded)
+				push 0
+				push 0
+				push WM_CLOSE
+				push ebx
+				call lpDialogProc
+			.endif
+		.endif
+		mov eax, dlg.pPrev
+		mov g_pDlg, eax
+		mov eax, dlg.dwRC
+		ret
+		align 4
+_RunDialog endp
 
 DialogBoxParamA proc public hInstance:dword, lpTemplateName:dword, 
 		hwndParent:HWND, lpDialogProc:dword, dwInitParm:dword
 
-local	szText[80]:byte
-
-		invoke wsprintf, addr szText, CStr("DialogBoxParam(%X) called"), lpTemplateName
-		invoke MessageBox, hwndParent, addr szText, 0, MB_OK
-		@strace	<"DialogBoxParamA(", hInstance, ", ", lpTemplateName, ", ", hwndParent, ", ", lpDialogProc, ", ", dwInitParm, ")=", eax, " *** unsupp">
+		invoke _RunDialog, lpDialogProc, dwInitParm
+		@strace	<"DialogBoxParamA(", hInstance, ", ", lpTemplateName, ", ", hwndParent, ", ", lpDialogProc, ", ", dwInitParm, ")=", eax, " (no controls: IDOK sent)">
 		ret
 		align 4
 DialogBoxParamA endp
@@ -46,17 +101,27 @@ DialogBoxParamW endp
 DialogBoxIndirectParamA proc public hInstance:dword, lpTemplate:ptr, 
 		hwndParent:HWND, lpDialogProc:dword, dwInitParm:dword
 
-local	szText[80]:byte
-
-		invoke wsprintf, addr szText, CStr("DialogBoxIndirectParam(%X) called"), lpTemplate
-		invoke MessageBox, hwndParent, addr szText, 0, MB_OK
-		@strace	<"DialogBoxIndirectParamA(", hInstance, ", ", lpTemplate, ", ", hwndParent, ", ", lpDialogProc, ", ", dwInitParm, ")=", eax, " *** unsupp">
+		invoke _RunDialog, lpDialogProc, dwInitParm
+		@strace	<"DialogBoxIndirectParamA(", hInstance, ", ", lpTemplate, ", ", hwndParent, ", ", lpDialogProc, ", ", dwInitParm, ")=", eax, " (no controls: IDOK sent)">
 		ret
 		align 4
 DialogBoxIndirectParamA endp
 
 EndDialog proc public hDlg:dword, dwRC:dword
+
+		mov ecx, g_pDlg
+		.while (ecx)
+			.if (ecx == hDlg)
+				mov [ecx].DLGSTATE.bEnded, 1
+				mov eax, dwRC
+				mov [ecx].DLGSTATE.dwRC, eax
+				@mov eax, 1
+				jmp done
+			.endif
+			mov ecx, [ecx].DLGSTATE.pPrev
+		.endw
 		xor eax, eax
+done:
 		@strace	<"EndDialog(", hDlg, ", ", dwRC, ")=", eax>
 		ret
 		align 4
