@@ -17,57 +17,111 @@ endif
 
 		.DATA
 
-;--- modal dialogs run without a dialog manager: there are no controls, no template is read.
-;--- the dialog procedure gets WM_INITDIALOG, then WM_COMMAND with IDOK (as if the user
-;--- accepted the defaults), then IDCANCEL, then WM_CLOSE, until it calls EndDialog().
-;--- the "window handle" of the dialog is a pointer to a DLGSTATE on the stack of the caller.
+;--- modal dialogs run without a dialog manager: no template is read, no control is created.
+;--- the dialog is a real, hidden window (so that SendMessage(hDlg, WM_SETICON...), GetWindowRect(hDlg)
+;--- and the like work) of the class "HXDlg", whose window procedure hands every message to the
+;--- dialog procedure (DefWindowProc if it returns FALSE). The dialog procedure gets WM_INITDIALOG,
+;--- then WM_COMMAND with IDOK (as if the user accepted the defaults), then IDCANCEL, then WM_CLOSE,
+;--- until it calls EndDialog(). If the window cannot be created, the "window handle" is a pointer to
+;--- the DLGSTATE on the stack of the caller and the dialog procedure is called directly.
 
 DLGSTATE struct
 pPrev		dd ?		;enclosing modal dialog
 bEnded		dd ?
 dwRC		dd ?
+hDlg		dd ?		;window of the dialog, or 0
+lpProc		dd ?		;dialog procedure
 DLGSTATE ends
 
 g_pDlg		dd 0		;innermost modal dialog
+g_bDlgClass	dd 0		;class "HXDlg" registered
 
 		.code
 
-_RunDialog proc uses ebx lpDialogProc:dword, dwInitParm:dword
+_DlgWndProc proc uses ebx hWnd:dword, msg:dword, wParam:dword, lParam:dword
+
+		invoke GetWindowLongA, hWnd, 0
+		.if (eax)
+			mov ebx, eax
+			push lParam
+			push wParam
+			push msg
+			push hWnd
+			call [ebx].DLGSTATE.lpProc
+			.if (eax)
+				xor eax, eax		;processed
+				jmp done
+			.endif
+		.endif
+		invoke DefWindowProcA, hWnd, msg, wParam, lParam
+done:
+		ret
+		align 4
+_DlgWndProc endp
+
+;--- send a message to the dialog: through its window, or directly
+
+_DlgSend proc uses ebx pDlg:dword, msg:dword, wParam:dword, lParam:dword
+
+		mov ebx, pDlg
+		.if ([ebx].DLGSTATE.hDlg)
+			invoke SendMessageA, [ebx].DLGSTATE.hDlg, msg, wParam, lParam
+		.else
+			push lParam
+			push wParam
+			push msg
+			push ebx
+			call [ebx].DLGSTATE.lpProc
+		.endif
+		ret
+		align 4
+_DlgSend endp
+
+_RunDialog proc uses ebx lpDialogProc:dword, dwInitParm:dword, hwndParent:dword
 
 local	dlg:DLGSTATE
+local	wc:WNDCLASS
+local	hInst:dword
 
 		mov eax, g_pDlg
 		mov dlg.pPrev, eax
 		mov dlg.bEnded, 0
 		mov dlg.dwRC, 1		;IDOK if the procedure never calls EndDialog
+		mov dlg.hDlg, 0
+		mov eax, lpDialogProc
+		mov dlg.lpProc, eax
 		lea ebx, dlg
 		mov g_pDlg, ebx
 		.if (lpDialogProc)
-			push dwInitParm
-			push 0			;wParam: the control that gets the focus
-			push WM_INITDIALOG
-			push ebx
-			call lpDialogProc
+			invoke GetModuleHandleA, 0
+			mov hInst, eax
+			.if (!g_bDlgClass)
+				invoke RtlZeroMemory, addr wc, sizeof WNDCLASS
+				mov wc.lpfnWndProc, offset _DlgWndProc
+				mov wc.cbWndExtra, 4
+				mov eax, hInst
+				mov wc.hInstance, eax
+				mov wc.lpszClassName, CStr("HXDlg")
+				invoke RegisterClassA, addr wc
+				mov g_bDlgClass, 1
+			.endif
+			invoke CreateWindowExA, 0, CStr("HXDlg"), CStr(""), WS_POPUP, 0, 0, 0, 0, hwndParent, 0, hInst, 0
+			.if (eax)
+				mov dlg.hDlg, eax
+				invoke SetWindowLongA, eax, 0, ebx
+			.endif
+			invoke _DlgSend, ebx, WM_INITDIALOG, 0, dwInitParm
 			.if (!dlg.bEnded)
-				push 0
-				push IDOK
-				push WM_COMMAND
-				push ebx
-				call lpDialogProc
+				invoke _DlgSend, ebx, WM_COMMAND, IDOK, 0
 			.endif
 			.if (!dlg.bEnded)
-				push 0
-				push IDCANCEL
-				push WM_COMMAND
-				push ebx
-				call lpDialogProc
+				invoke _DlgSend, ebx, WM_COMMAND, IDCANCEL, 0
 			.endif
 			.if (!dlg.bEnded)
-				push 0
-				push 0
-				push WM_CLOSE
-				push ebx
-				call lpDialogProc
+				invoke _DlgSend, ebx, WM_CLOSE, 0, 0
+			.endif
+			.if (dlg.hDlg)
+				invoke DestroyWindow, dlg.hDlg
 			.endif
 		.endif
 		mov eax, dlg.pPrev
@@ -80,7 +134,7 @@ _RunDialog endp
 DialogBoxParamA proc public hInstance:dword, lpTemplateName:dword, 
 		hwndParent:HWND, lpDialogProc:dword, dwInitParm:dword
 
-		invoke _RunDialog, lpDialogProc, dwInitParm
+		invoke _RunDialog, lpDialogProc, dwInitParm, hwndParent
 		@strace	<"DialogBoxParamA(", hInstance, ", ", lpTemplateName, ", ", hwndParent, ", ", lpDialogProc, ", ", dwInitParm, ")=", eax, " (no controls: IDOK sent)">
 		ret
 		align 4
@@ -101,7 +155,7 @@ DialogBoxParamW endp
 DialogBoxIndirectParamA proc public hInstance:dword, lpTemplate:ptr, 
 		hwndParent:HWND, lpDialogProc:dword, dwInitParm:dword
 
-		invoke _RunDialog, lpDialogProc, dwInitParm
+		invoke _RunDialog, lpDialogProc, dwInitParm, hwndParent
 		@strace	<"DialogBoxIndirectParamA(", hInstance, ", ", lpTemplate, ", ", hwndParent, ", ", lpDialogProc, ", ", dwInitParm, ")=", eax, " (no controls: IDOK sent)">
 		ret
 		align 4
@@ -111,7 +165,8 @@ EndDialog proc public hDlg:dword, dwRC:dword
 
 		mov ecx, g_pDlg
 		.while (ecx)
-			.if (ecx == hDlg)
+			mov eax, hDlg
+			.if ((ecx == eax) || (eax && (eax == [ecx].DLGSTATE.hDlg)))
 				mov [ecx].DLGSTATE.bEnded, 1
 				mov eax, dwRC
 				mov [ecx].DLGSTATE.dwRC, eax

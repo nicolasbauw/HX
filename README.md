@@ -163,14 +163,16 @@ the “run in full screen?” or options box of a demo, a launcher) stopped on a
 `DialogBoxParam(41) called`, the function being a stub.
 
 **Change.** `SrcEmu/DUSER32/Dlgbox.asm`: there is still no dialog manager (no template is read, no
-control is created), but the dialog procedure now gets what a user who accepts the defaults would
-produce: `WM_INITDIALOG` (with the initialization parameter), then `WM_COMMAND` with `IDOK`, then
-`IDCANCEL`, then `WM_CLOSE`, until it calls `EndDialog`; the dialog function returns the value passed
-to `EndDialog` (1, `IDOK`, if the procedure never ends the dialog, so that nothing stays blocked). `EndDialog`
-works, with nested dialogs. The window handle of the dialog is an opaque handle: `GetDlgItem` and the other
-functions of the dialogs still return 0, as before, and procedures that need real controls will not do much.
-Tested with `c/tests/win32/dialog.c` of [Bare86](https://github.com/nicolasbauw/bare86)
-(test `hx_dialog`): OK, cancel only, close only, never ends, nested.
+control is created), but the dialog is a real, hidden window of the class `HXDlg` (so that
+`SendMessage(hDlg, WM_SETICON, ...)`, `GetWindowRect(hDlg)` and the like work: an opaque handle made
+programs jump to address 0x13), and the dialog procedure gets what a user who accepts the defaults would
+produce: `WM_INITDIALOG` (with the initialization parameter), then `WM_COMMAND` with `IDOK`, then `IDCANCEL`,
+then `WM_CLOSE`, until it calls `EndDialog`; the dialog function returns the value passed to `EndDialog` (1,
+`IDOK`, if the procedure never ends the dialog, so that nothing stays blocked). `EndDialog` works, with nested
+dialogs. `GetDlgItem` and the other functions of the dialogs still return 0, as before, and procedures that
+need real controls will not do much. Tested with `c/tests/win32/dialog.c` of
+[Bare86](https://github.com/nicolasbauw/bare86) (test `hx_dialog`): OK, cancel only, close only, never ends,
+nested, message to the own window.
 
 ## Building
 
