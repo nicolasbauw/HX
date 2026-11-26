@@ -62,9 +62,23 @@ StretchDIBits proc public uses esi hdcDst:dword, nXDst:dword, nYDst:dword,
             movzx eax, [ecx].BITMAPINFOHEADER.biBitCount
             mov [esi].DCOBJ.dwBpp, eax
             mov eax, [ecx].BITMAPINFOHEADER.biWidth
+            mov [esi].DCOBJ.dwWidth, eax
             mul [ecx].BITMAPINFOHEADER.biBitCount
-            shr eax, 3
+            add eax, 31				;DIB lines are dword aligned
+            shr eax, 5
+            shl eax, 2
             mov [esi].DCOBJ.lPitch, eax
+;--- the size of the DC must be the size of the bitmap, not the one of the screen
+;--- the compatible DC was made from: BitBlt() limits the lines and the columns
+;--- it reads to it (a positive height is a bottom-up bitmap)
+            mov eax, [ecx].BITMAPINFOHEADER.biHeight
+            or [esi].DCOBJ.dwFlags, DCF_BOTTOM_UP
+            test eax, eax
+            jns @F
+            neg eax
+            and [esi].DCOBJ.dwFlags, not DCF_BOTTOM_UP
+@@:
+            mov [esi].DCOBJ.dwHeight, eax
             mov eax, lpBits
             mov [esi].DCOBJ.pBMBits, eax
             mov [esi].DCOBJ.pOrigin, eax

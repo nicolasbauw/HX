@@ -94,10 +94,21 @@ DirectX object: a different problem, not fixed here.)
 
 ### 3. `GetDeviceCaps(RASTERCAPS)` declares `StretchBlt` and `StretchDIBits` (DGDI32)
 
-`StretchBlt` and `StretchDIBits` are implemented (`STRETCH.ASM`) but not declared
-by `GetDeviceCaps(RASTERCAPS)` (`RC_STRETCHBLT`, `RC_STRETCHDIB`). The launcher of
+`StretchBlt` and `StretchDIBits` exist (`STRETCH.ASM`; they copy, they do **not** scale
+yet) but were not declared by `GetDeviceCaps(RASTERCAPS)` (`RC_STRETCHBLT`,
+`RC_STRETCHDIB`). The launcher of
 Half-Life checks them and stops with “Your graphics card does not support a
 necessary raster operation”. `SrcEmu/DGDI32/DEVCAPS.ASM` now declares them.
+
+### 4. `StretchDIBits` gives its temporary DC the size and orientation of the bitmap (DGDI32)
+
+`StretchDIBits` built a compatible DC and overrode its bit count, pitch and bits,
+but not its width and height, which stayed those of the screen: `BitBlt` then
+believed the source to be 800×600 and read past the end of a smaller bitmap
+(the 2001 fast intro `WURST!!` crashed in `gdi32.dll`). `SrcEmu/DGDI32/STRETCH.ASM`
+now sets width and height from the bitmap header, rounds the pitch to a dword
+(DIB lines are dword aligned) and marks a positive-height bitmap as bottom-up (it
+was drawn upside down). `WURST!!` runs and shows its picture, unscaled.
 
 ## Building
 
