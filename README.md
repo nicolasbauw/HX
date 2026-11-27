@@ -163,17 +163,23 @@ a red, a green, a blue and a white corner shows pure red, green, blue and white.
 the “run in full screen?” or options box of a demo, a launcher) stopped on a grey box saying
 `DialogBoxParam(41) called`, the function being a stub.
 
-**Change.** `SrcEmu/DUSER32/Dlgbox.asm`: there is still no dialog manager (no template is read, no
-control is created), but the dialog is a real, hidden window of the class `HXDlg` (so that
-`SendMessage(hDlg, WM_SETICON, ...)`, `GetWindowRect(hDlg)` and the like work: an opaque handle made
-programs jump to address 0x13), and the dialog procedure gets what a user who accepts the defaults would
-produce: `WM_INITDIALOG` (with the initialization parameter), then `WM_COMMAND` with `IDOK`, then `IDCANCEL`,
-then `WM_CLOSE`, until it calls `EndDialog`; the dialog function returns the value passed to `EndDialog` (1,
-`IDOK`, if the procedure never ends the dialog, so that nothing stays blocked). `EndDialog` works, with nested
-dialogs. `GetDlgItem` and the other functions of the dialogs still return 0, as before, and procedures that
-need real controls will not do much. Tested with `c/tests/win32/dialog.c` of
+**Change.** `SrcEmu/DUSER32/Dlgbox.asm`: there is still no dialog manager (no control is created), but the
+dialog is a real, hidden window of the class `HXDlg` (so that `SendMessage(hDlg, WM_SETICON, ...)`,
+`GetWindowRect(hDlg)` and the like work: an opaque handle made programs jump to address 0x13), and the dialog
+procedure gets what a user who presses Enter would produce: `WM_INITDIALOG` (with the initialization parameter),
+then `WM_COMMAND` with the id of the **default push button** of the template (`BS_DEFPUSHBUTTON`: the “Start”
+or “Run” button of a demo's setup box, whose id is rarely `IDOK`; `DLGTEMPLATE` and `DLGTEMPLATEEX` are read,
+from the resource or the indirect template), then `IDOK`, `IDCANCEL` and `WM_CLOSE`, until it calls `EndDialog`;
+the dialog function returns the value passed to `EndDialog` (1, `IDOK`, if the procedure never ends the dialog,
+so that nothing stays blocked). `EndDialog` works, with nested dialogs. The check state set by `CheckDlgButton`,
+`CheckRadioButton` or `BM_SETCHECK` is kept per dialog, so `IsDlgButtonChecked` and `BM_GETCHECK` read back the
+defaults the procedure chose. **Modeless** dialogs (`CreateDialogParamA`, `CreateDialogIndirectParamA`, which
+returned NULL) get the same hidden window and `WM_INITDIALOG`, and the `WM_COMMAND` of the default button is
+posted to the window, so the program's message loop delivers it. `GetDlgItem` still returns 0, and procedures
+that need real controls (list or combo box contents) will not do much. Found with the setup boxes of the demos
+`houston` (FMOD, “Start”) and `mindstam` (BASS, modeless, “Run”). Tested with `c/tests/win32/dialog.c` of
 [Bare86](https://github.com/nicolasbauw/bare86) (test `hx_dialog`): OK, cancel only, close only, never ends,
-nested, message to the own window.
+nested, message to the own window, default button, check states, modeless dialog.
 
 ### 9. `MSVFW32.DLL`, the DrawDib functions of Video for Windows (new DLL)
 
@@ -217,11 +223,11 @@ they return what a program that does not care expects.
 - **DUSER32** (`GetClipCursor` in `CURSOR.ASM`, the others in the new `Extras.asm`): `GetClipCursor` returns the rectangle
   set by `ClipCursor`, or the screen; `FrameRect` draws a one pixel frame in the color of a brush; `GetDCEx` is `GetDC`;
   `HideCaret`, `ShowCaret`, `ExcludeUpdateRgn`, `SetScrollInfo`, `GetScrollInfo`, `GetScrollPos`, `GetScrollRange`,
-  `ShowScrollBar`, `EnableScrollBar`, `DrawEdge`, `DrawFrameControl` (nothing is drawn), `CheckRadioButton`,
+  `ShowScrollBar`, `EnableScrollBar`, `DrawEdge`, `DrawFrameControl` (nothing is drawn),
   `SetMessageQueue`, `InsertMenuItemA`, `TranslateMDISysAccel`, `ActivateKeyboardLayout` (US English),
   `BeginDeferWindowPos`/`DeferWindowPos`/`EndDeferWindowPos` (the windows are moved at once);
-  `DefDlgProcA`, `DefMDIChildProcA`, `DefFrameProcA` call `DefWindowProcA`; `CreateDialogIndirectParamA` returns NULL, like
-  `CreateDialogParamA`.
+  `DefDlgProcA`, `DefMDIChildProcA`, `DefFrameProcA` call `DefWindowProcA` (`CheckRadioButton` and
+  `CreateDialogIndirectParamA`: see item 8).
 - **DGDI32** (new `Extras.asm`): `GetBrushOrgEx`/`SetBrushOrgEx` (the origin is always 0,0), `CreatePenIndirect`
   (through `CreatePen`), `GetBkMode`.
 - **WINMM**: `joySetThreshold`, `joyGetThreshold` (no joystick: `MMSYSERR_NODRIVER`, like the other `joy` functions),
@@ -238,6 +244,17 @@ they return what a program that does not care expects.
 Tested with `c/tests/win32/smallfuncs.c` of [Bare86](https://github.com/nicolasbauw/bare86) (test `hx_smallfuncs`), which imports
 them by name (OLE32 and COMCTL32 by `GetProcAddress`). Not done: the image lists of COMCTL32 (`ImageList_*`, needed by the programs
 that use MFC), `EnumFontsA`.
+
+### 12. Padding after the last relocation block no longer hangs the loader (DPMILD32)
+
+**Symptom.** Programs whose DLL is packed by UPX (`fmod.dll` of the demos `houston`, `backthen`, `avd`; some packed
+executables loaded at another base) hung at start, in a loop of the loader.
+
+**Cause.** The base relocation directory of these files is 2 bytes longer than its blocks (padding after the last
+block). `DoFixups` read the padding and what follows as a block of size 0: the remaining size never decreased.
+
+**Change.** `Src/DPMILDR/PELOAD.ASM`, `DoFixups`: a block smaller than its header, or a remainder too small for a
+header, ends the table, as in Windows.
 
 ## Building
 
