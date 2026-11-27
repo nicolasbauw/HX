@@ -293,6 +293,19 @@ box (`CB_`/`LB_` `ADDSTRING`, `INSERTSTRING` (appended), `GETCOUNT`, `SETCURSEL`
 trackbar (`TBM_SETPOS`, `TBM_GETPOS`). Nothing is drawn. Tested with `c/tests/win32/dialog.c` of
 [Bare86](https://github.com/nicolasbauw/bare86) (test `hx_dialog`); the MFC demos `moments` and `mosaik` start.
 
+### 15. `TextOutA` stays inside the bitmap and draws bottom-up bitmaps the right way up (DGDI32)
+
+**Symptom.** The demo `flush` crashed in `gdi32.dll` (`exception C0000005`, `TextOutA`), and text drawn into a bottom-up
+bitmap (a DIB section of positive height, the usual case) came out upside down, at the bottom.
+
+**Cause.** `TextOutA` computed the address of the text from the coordinates (with unsigned multiplications) and wrote every
+pixel without any bound; rows were taken from the start of the bits downwards even for a bottom-up bitmap.
+
+**Change.** `SrcEmu/DGDI32/TEXTOUT.ASM`: signed coordinates; for a bottom-up memory bitmap, row `y` is `height - 1 - y` rows
+above the bits and the text goes up in memory; a pixel outside the surface (from its origin to `pitch × height`) is not
+written. Pixels beyond the right edge of a row still wrap into the next row (no horizontal clipping yet). Tested with
+`c/tests/win32/textout.c` of [Bare86](https://github.com/nicolasbauw/bare86) (test `hx_textout`).
+
 ## Building
 
 HX's own build needs Open Watcom's `wmake` or `nmake`, JWasm, JWlink and a DOS or

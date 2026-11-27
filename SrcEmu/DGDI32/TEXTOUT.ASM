@@ -210,15 +210,37 @@ local	lpfnSetColor:dword
 local	dwPixelWidth:dword
 local	bHeight:byte
 local	bWidth:byte
+local	dwLo:dword
+local	dwHi:dword
 
         mov		esi, hdc
+;--- bounds of the surface: pixels outside are not drawn
+		mov		eax, [esi].DCOBJ.pBMBits
+		mov		ecx, [esi].DCOBJ.pOrigin
+		.if (ecx && (ecx <= eax))
+			mov eax, ecx
+		.endif
+		mov		dwLo, eax
+		mov		eax, [esi].DCOBJ.lPitch
+		mul		[esi].DCOBJ.dwHeight
+		add		eax, dwLo
+		mov		dwHi, eax
         mov		eax, [esi].DCOBJ.lPitch
         mov		dwPitch, eax
         mov		ecx, nYStart
 if ?MAPPING
 		add		ecx, [esi].DCOBJ.ptViewportOrg.y
 endif
-        mul		ecx
+;--- bottom-up bitmap: row y is (height - 1 - y) rows above the bits, and rows go up
+		mov		edx, [esi].DCOBJ.dwFlags
+		.if ((edx & DCF_BOTTOM_UP) && !(edx & DCF_SCREEN))
+			mov edx, [esi].DCOBJ.dwHeight
+			dec edx
+			sub edx, ecx
+			mov ecx, edx
+			neg dwPitch
+		.endif
+        imul	ecx
         
         mov		edi, [esi].DCOBJ.pBMBits
         add		edi, eax
@@ -240,13 +262,16 @@ endif
         	jmp exit
         .endif
         mov		dwBpp, eax
+		mov		ecx, dwPixelWidth
+		dec		ecx
+		sub		dwHi, ecx			;last address where a whole pixel fits
 
         mov		ecx, nXStart
 if ?MAPPING
 		add		ecx, [esi].DCOBJ.ptViewportOrg.x
 endif
-        mul		ecx
-        shr		eax, 3              ;works for bpp >= 8 only currently
+        imul	ecx
+        sar		eax, 3              ;works for bpp >= 8 only currently
         add		edi, eax
         mov		eax, [esi].DCOBJ._BkColor
         mov		edx, [esi].DCOBJ._TextColor
@@ -295,6 +320,10 @@ nextpixel:
         jz		nopixel
 		mov		eax,dwBkColor
 @@:
+		cmp		edi, dwLo
+		jb		nopixel
+		cmp		edi, dwHi
+		jae		nopixel
         call	lpfnSetColor
 nopixel:
         add 	edi, dwPixelWidth
