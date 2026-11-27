@@ -21,6 +21,13 @@ InitCommonControls proc public
 	align 4
 InitCommonControls endp
 
+InitCommonControlsEx proc public lpInitCtrls:ptr
+	mov eax,1
+	@strace <"InitCommonControlsEx(", lpInitCtrls, ")=", eax>
+	ret
+	align 4
+InitCommonControlsEx endp
+
 CreatePropertySheetPage proc public lppsp:ptr
 CreatePropertySheetPage endp
 

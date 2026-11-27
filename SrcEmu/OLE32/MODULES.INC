@@ -3,4 +3,5 @@
 .\coinit.ASM \
 .\comalloc.ASM \
 .\storage.ASM \
-.\strgguid.ASM 
+.\strgguid.ASM \
+.\Extras.ASM

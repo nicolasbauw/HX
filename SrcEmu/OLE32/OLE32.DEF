@@ -3,6 +3,8 @@ LIBRARY OLE32
 
 EXPORTS
  CLSIDFromProgID
+ CoBuildVersion
+ IsEqualGUID
  CLSIDFromString
  CoCreateGuid
  CoCreateInstance

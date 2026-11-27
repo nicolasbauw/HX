@@ -219,3 +219,7 @@ EXPORTS
  SetBrushOrgEx
  CreatePenIndirect
  GetBkMode
+ GetStretchBltMode
+ CreateHatchBrush
+ CreateDIBPatternBrushPt
+ CreateRoundRectRgn

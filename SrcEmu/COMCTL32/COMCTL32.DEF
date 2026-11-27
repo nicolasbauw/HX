@@ -9,6 +9,7 @@ EXPORTS
  LBItemFromPt             @14
  DrawInsert               @15
  InitCommonControls       @17
+ InitCommonControlsEx     @81
  CreatePropertySheetPage  @18
  CreatePropertySheetPageA @19
  PropertySheet            @87

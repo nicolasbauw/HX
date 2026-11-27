@@ -220,4 +220,8 @@ EXPORT {
  SetBrushOrgEx
  CreatePenIndirect
  GetBkMode
+ GetStretchBltMode
+ CreateHatchBrush
+ CreateDIBPatternBrushPt
+ CreateRoundRectRgn
 }

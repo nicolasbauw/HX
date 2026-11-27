@@ -4,6 +4,8 @@ OPTION MODNAME=OLE32
 OPTION FUZZYEXPORT
 EXPORT {
  CLSIDFromProgID
+ CoBuildVersion
+ IsEqualGUID
  CLSIDFromString
  CoCreateGuid
  CoCreateInstance

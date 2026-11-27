@@ -53,6 +53,7 @@ EXPORTS
  mixerGetNumDevs
  mixerOpen
  mixerSetControlDetails
+ PlaySoundA
  sndPlaySoundA
  timeBeginPeriod
  timeEndPeriod

@@ -18,6 +18,8 @@ lopnWidthY	DWORD ?
 lopnColor	DWORD ?
 LOGPEN_ ends
 
+CreateRectRgn proto stdcall :SDWORD, :SDWORD, :SDWORD, :SDWORD
+
 		.CODE
 
 ;--- the origin of brushes is always 0,0 (patterns are aligned to the screen)
@@ -57,5 +59,41 @@ GetBkMode proc public hdc:dword
 		ret
 		align 4
 GetBkMode endp
+
+;--- GetStretchBltMode(): the mode set by SetStretchBltMode (the scaling itself does not depend on it)
+
+GetStretchBltMode proc public hdc:dword
+		mov ecx, hdc
+		movzx eax, [ecx].DCOBJ.bStretch
+		.if (!eax)
+			mov eax, 1			;BLACKONWHITE, the default
+		.endif
+		ret
+		align 4
+GetStretchBltMode endp
+
+;--- brushes with a pattern are not implemented: a hatch brush is a solid brush of its color,
+;--- a DIB pattern brush a solid grey one (so that programs that use them keep running)
+
+CreateHatchBrush proc public iHatch:dword, crColor:COLORREF
+		invoke CreateSolidBrush, crColor
+		ret
+		align 4
+CreateHatchBrush endp
+
+CreateDIBPatternBrushPt proc public lpPackedDIB:ptr, iUsage:dword
+		invoke CreateSolidBrush, 808080h
+		ret
+		align 4
+CreateDIBPatternBrushPt endp
+
+;--- a rectangular region (the rounded corners are ignored)
+
+CreateRoundRectRgn proc public nLeft:SDWORD, nTop:SDWORD, nRight:SDWORD, nBottom:SDWORD, nWidthEllipse:SDWORD, nHeightEllipse:SDWORD
+		invoke CreateRectRgn, nLeft, nTop, nRight, nBottom
+		ret
+		align 4
+CreateRoundRectRgn endp
+
 
 		end

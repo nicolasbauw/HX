@@ -235,4 +235,23 @@ exit:
 
 sndPlaySoundA endp
 
+;--- PlaySoundA(): file names and memory images like sndPlaySoundA(); system sound aliases and resources are not available here
+;--- (the call reports success, as if the sound had been played)
+
+PlaySoundA proc public pszSound:ptr byte, hmod:dword, fdwSound:dword
+
+		mov eax, fdwSound
+		test eax, 50000h		;SND_ALIAS (10000h), SND_RESOURCE (40000h)
+		jnz done
+		and eax, 0FFh			;SND_ASYNC, SND_MEMORY, ... have the same values as for sndPlaySoundA
+		invoke sndPlaySoundA, pszSound, eax
+		ret
+done:
+		@mov eax, 1
+		@strace <"PlaySoundA(", pszSound, ", ", hmod, ", ", fdwSound, ")=", eax, " (alias/resource: not played)">
+		ret
+		align 4
+PlaySoundA endp
+
+
 	end

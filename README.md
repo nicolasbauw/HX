@@ -6,9 +6,9 @@ carries a few fixes needed by [Bare86](https://github.com/nicolasbauw/bare86), a
 program that runs DOS programs, and Windows programs through HX, on Linux.
 
 Upstream is based on v2.24 (`198ec32`). Nothing else than what is listed under
-[What this fork changes](#what-this-fork-changes) differs from it. Five binaries
-differ from the official HX package (`DPMILD32.EXE`, `DGDI32.DLL`, `DUSER32.DLL`, `VESA32.DLL`, `WINMM.DLL`) and one is added
-(`MSVFW32.DLL`).
+[What this fork changes](#what-this-fork-changes) differs from it. Seven binaries
+differ from the official HX package (`DPMILD32.EXE`, `DGDI32.DLL`, `DUSER32.DLL`, `VESA32.DLL`, `WINMM.DLL`, `OLE32.DLL`, `COMCTL32.DLL`)
+and one is added (`MSVFW32.DLL`).
 
 ## What HX is
 
@@ -227,9 +227,17 @@ they return what a program that does not care expects.
 - **WINMM**: `joySetThreshold`, `joyGetThreshold` (no joystick: `MMSYSERR_NODRIVER`, like the other `joy` functions),
   `joyConfigChanged`, `waveOutSetPlaybackRate`, `waveOutGetPlaybackRate` (`MMSYSERR_NOTSUPPORTED`), `timeGetSystemTime`.
 
+- **DGDI32**, imported by demos that failed to load without them: `GetStretchBltMode` (the mode set by `SetStretchBltMode`),
+  `CreateHatchBrush` (a solid brush of the hatch color), `CreateDIBPatternBrushPt` (a solid grey brush) and `CreateRoundRectRgn`
+  (a rectangular region): patterns and rounded corners are not implemented, the programs just keep running.
+- **WINMM**: `PlaySoundA` (file names and memory images like `sndPlaySoundA`; system sound aliases and resources report success without
+  playing anything).
+- **OLE32** (rebuilt by `build-linux/build-simple.sh`): `IsEqualGUID`, `CoBuildVersion` (23.700).
+- **COMCTL32** (rebuilt by `build-linux/build-simple.sh`): `InitCommonControlsEx` (ordinal 81, returns TRUE).
+
 Tested with `c/tests/win32/smallfuncs.c` of [Bare86](https://github.com/nicolasbauw/bare86) (test `hx_smallfuncs`), which imports
-them by name. Not done: the image lists of COMCTL32 (`ImageList_*`, needed by the programs that use MFC), `EnumFontsA`,
-the OLE functions `CoBuildVersion` and `IsEqualGUID`.
+them by name (OLE32 and COMCTL32 by `GetProcAddress`). Not done: the image lists of COMCTL32 (`ImageList_*`, needed by the programs
+that use MFC), `EnumFontsA`.
 
 ## Building
 
@@ -248,6 +256,10 @@ build-linux/build-winmm.sh    [WORK_DIR]
 # result: WORK_DIR/winmm/out/WINMM.DLL (imports from SB16.DLL declared to the linker)
 build-linux/build-msvfw32.sh  [WORK_DIR]
 # result: WORK_DIR/msvfw32/out/MSVFW32.DLL
+build-linux/build-simple.sh ole32 "DKRNL32.lib,DADVAPI.lib,DUSER32.lib" [WORK_DIR]
+# result: WORK_DIR/ole32/out/OLE32.DLL
+build-linux/build-simple.sh comctl32 "DKRNL32.lib,DUSER32.lib" [WORK_DIR]
+# result: WORK_DIR/comctl32/out/COMCTL32.DLL
 build-linux/build-vesa32.sh   [WORK_DIR]
 # result: WORK_DIR/vesa32/out/VESA32.DLL (same size as the official one when built from the unmodified sources)
 ```
@@ -267,12 +279,12 @@ images with it as with the official DLL.
 
 The other parts of HX (HDPMI, the other DLLs) are **not** rebuilt by this fork: use
 the binaries of the [official packages](https://github.com/Baron-von-Riedesel/HX/releases)
-and replace `BIN/DPMILD32.EXE`, `BIN/DGDI32.DLL`, `BIN/DUSER32.DLL`, `BIN/VESA32.DLL` and `BIN/WINMM.DLL` with the ones of this fork's releases, and add `BIN/MSVFW32.DLL` (HX has none).
+and replace `BIN/DPMILD32.EXE`, `BIN/DGDI32.DLL`, `BIN/DUSER32.DLL`, `BIN/VESA32.DLL`, `BIN/WINMM.DLL`, `BIN/OLE32.DLL` and `BIN/COMCTL32.DLL` with the ones of this fork's releases, and add `BIN/MSVFW32.DLL` (HX has none).
 
 ## Use with Bare86
 
 [Bare86](https://github.com/nicolasbauw/bare86) downloads the official HX package on
-first use and checks its SHA-256. The fork's `DPMILD32.EXE`, `DGDI32.DLL`, `DUSER32.DLL`, `VESA32.DLL` and `WINMM.DLL` replace the official
+first use and checks its SHA-256. The fork's `DPMILD32.EXE`, `DGDI32.DLL`, `DUSER32.DLL`, `VESA32.DLL`, `WINMM.DLL`, `OLE32.DLL` and `COMCTL32.DLL` replace the official
 ones in the same directory; both can be told apart by their SHA-256, given in each
 release's notes.
 
