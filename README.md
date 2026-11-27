@@ -7,7 +7,7 @@ program that runs DOS programs, and Windows programs through HX, on Linux.
 
 Upstream is based on v2.24 (`198ec32`). Nothing else than what is listed under
 [What this fork changes](#what-this-fork-changes) differs from it. Seven binaries
-differ from the official HX package (`DPMILD32.EXE`, `DGDI32.DLL`, `DUSER32.DLL`, `VESA32.DLL`, `WINMM.DLL`, `OLE32.DLL`, `COMCTL32.DLL`)
+differ from the official HX package (`DPMILD32.EXE`, `DGDI32.DLL`, `DUSER32.DLL`, `VESA32.DLL`, `WINMM.DLL`, `OLE32.DLL`, `COMCTL32.DLL`, `VERSION.DLL`)
 and one is added (`MSVFW32.DLL`).
 
 ## What HX is
@@ -256,6 +256,24 @@ block). `DoFixups` read the padding and what follows as a block of size 0: the r
 **Change.** `Src/DPMILDR/PELOAD.ASM`, `DoFixups`: a block smaller than its header, or a remainder too small for a
 header, ends the table, as in Windows.
 
+### 13. `VERSION.DLL` reads version resources
+
+**Symptom.** Programs that ship Intel's JPEG library (`ijl11.dll`, `ijl10.dll`: about ten demos) stopped at once with
+`ijl11.dll: dll init failed`.
+
+**Cause.** The `DllMain` of the library reads its own version resource (`GetModuleFileName`, `GetFileVersionInfoSizeA`,
+`GetFileVersionInfoA`, `VerQueryValueA("\")`, `VerQueryValueA("\StringFileInfo\040904B0\ProductVersion")`) and fails the
+load if one of them fails: `VerQueryValueA` and `VerQueryValueW` were stubs returning 0, and the other two loaded the file
+again with `LoadLibrary` while the DLL was being initialized.
+
+**Change.** `SrcEmu/VERSION/STUBS.ASM`: `GetFileVersionInfoSizeA` and `GetFileVersionInfoA` use the module itself when it is
+loaded (`GetModuleHandle`), else load it as before; as in Windows, the size returned leaves room for ANSI copies of the
+strings, marked by the signature `FE2X` after the resource. `VerQueryValueA/W` walk the `VS_VERSIONINFO` tree (keys
+compared without case): `\` gives the `VS_FIXEDFILEINFO`, `\VarFileInfo\Translation` the binary value, and string
+values are returned as such by the W function and converted to ANSI by the A function (in the room after the resource,
+or in place if the caller's buffer has none). Tested with `c/tests/win32/version.c` of
+[Bare86](https://github.com/nicolasbauw/bare86) (test `hx_version`).
+
 ## Building
 
 HX's own build needs Open Watcom's `wmake` or `nmake`, JWasm, JWlink and a DOS or
@@ -277,6 +295,8 @@ build-linux/build-simple.sh ole32 "DKRNL32.lib,DADVAPI.lib,DUSER32.lib" [WORK_DI
 # result: WORK_DIR/ole32/out/OLE32.DLL
 build-linux/build-simple.sh comctl32 "DKRNL32.lib,DUSER32.lib" [WORK_DIR]
 # result: WORK_DIR/comctl32/out/COMCTL32.DLL
+build-linux/build-simple.sh version "DKRNL32.lib" [WORK_DIR]
+# result: WORK_DIR/version/out/VERSION.DLL
 build-linux/build-vesa32.sh   [WORK_DIR]
 # result: WORK_DIR/vesa32/out/VESA32.DLL (same size as the official one when built from the unmodified sources)
 ```
@@ -296,12 +316,12 @@ images with it as with the official DLL.
 
 The other parts of HX (HDPMI, the other DLLs) are **not** rebuilt by this fork: use
 the binaries of the [official packages](https://github.com/Baron-von-Riedesel/HX/releases)
-and replace `BIN/DPMILD32.EXE`, `BIN/DGDI32.DLL`, `BIN/DUSER32.DLL`, `BIN/VESA32.DLL`, `BIN/WINMM.DLL`, `BIN/OLE32.DLL` and `BIN/COMCTL32.DLL` with the ones of this fork's releases, and add `BIN/MSVFW32.DLL` (HX has none).
+and replace `BIN/DPMILD32.EXE`, `BIN/DGDI32.DLL`, `BIN/DUSER32.DLL`, `BIN/VESA32.DLL`, `BIN/WINMM.DLL`, `BIN/OLE32.DLL`, `BIN/COMCTL32.DLL` and `BIN/VERSION.DLL` with the ones of this fork's releases, and add `BIN/MSVFW32.DLL` (HX has none).
 
 ## Use with Bare86
 
 [Bare86](https://github.com/nicolasbauw/bare86) downloads the official HX package on
-first use and checks its SHA-256. The fork's `DPMILD32.EXE`, `DGDI32.DLL`, `DUSER32.DLL`, `VESA32.DLL`, `WINMM.DLL`, `OLE32.DLL` and `COMCTL32.DLL` replace the official
+first use and checks its SHA-256. The fork's `DPMILD32.EXE`, `DGDI32.DLL`, `DUSER32.DLL`, `VESA32.DLL`, `WINMM.DLL`, `OLE32.DLL`, `COMCTL32.DLL` and `VERSION.DLL` replace the official
 ones in the same directory; both can be told apart by their SHA-256, given in each
 release's notes.
 

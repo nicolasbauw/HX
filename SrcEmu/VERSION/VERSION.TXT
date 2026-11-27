@@ -12,8 +12,8 @@
  GetFileVersionInfoSizeA
  GetFileVersionInfoSizeW
  GetFileVersionInfoW
- VerQueryValueA            Yes
- VerQueryValueW            Yes
+ VerQueryValueA
+ VerQueryValueW
 
 
  History
