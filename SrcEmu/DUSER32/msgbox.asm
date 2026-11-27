@@ -239,6 +239,35 @@ nexttry:
 		align 4
 TextMessage endp
 
+;--- every message box is also written to stderr ("[MessageBox] caption: text"): a demo that ends in a box often says why there, and
+;--- the box itself may be invisible (black screen) or never answered. Bare86 keeps stderr in hxstderr.log.
+
+_MsgToStderr proc uses ebx pszTitle:dword, pszText:dword
+
+local	dwWritten:dword
+local	hErr:dword
+local	dwLen:dword
+
+		invoke GetStdHandle, STD_ERROR_HANDLE
+		mov hErr, eax
+		invoke WriteFile, hErr, CStr("[MessageBox] "), 13, addr dwWritten, 0
+		.if (pszTitle)
+			invoke lstrlen, pszTitle
+			mov dwLen, eax
+			invoke WriteFile, hErr, pszTitle, dwLen, addr dwWritten, 0
+		.endif
+		invoke WriteFile, hErr, CStr(": "), 2, addr dwWritten, 0
+		.if (pszText)
+			invoke lstrlen, pszText
+			mov dwLen, eax
+			invoke WriteFile, hErr, pszText, dwLen, addr dwWritten, 0
+		.endif
+		invoke WriteFile, hErr, CStr(13,10), 2, addr dwWritten, 0
+		ret
+		align 4
+_MsgToStderr endp
+
+
 MessageBoxA proc public uses ebx esi hWnd:dword, pszStr:dword, pStr2:dword, flags:dword
 
 ife ?GUI
@@ -256,6 +285,7 @@ ifdef _DEBUG
 		.endif
 		@strace	<"MessageBoxA(", hWnd, ", ", pszStr, " [", &ecx, "], ", pStr2, ", ", flags, ") enter">
 endif
+		invoke _MsgToStderr, pStr2, pszStr
 		invoke GetModuleHandle, NULL
 		mov hInstance, eax
 		.if (!g_bInit)

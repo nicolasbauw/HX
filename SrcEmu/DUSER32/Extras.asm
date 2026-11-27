@@ -220,4 +220,53 @@ EndDeferWindowPos proc public hWinPosInfo:dword
 		align 4
 EndDeferWindowPos endp
 
+
+;--- accelerator tables are not implemented: a table is a non-NULL handle (programs, mostly MFC ones, only create and destroy it)
+
+CreateAcceleratorTableA proc public lpaccl:dword, cEntries:dword
+		invoke GetProcessHeap
+		invoke HeapAlloc, eax, 0, 16
+		@strace <"CreateAcceleratorTableA(", lpaccl, ", ", cEntries, ")=", eax, " *** unsupp ***">
+		ret
+		align 4
+CreateAcceleratorTableA endp
+
+DestroyAcceleratorTable proc public hAccel:dword
+		@mov eax, 1
+		@strace <"DestroyAcceleratorTable(", hAccel, ")=", eax>
+		ret
+		align 4
+DestroyAcceleratorTable endp
+
+
+;--- not implemented (imported by MFC based programs, which only need them to load)
+
+GetNextDlgGroupItem proc public p1:dword, p2:dword, p3:dword
+		xor eax, eax
+		@strace <"GetNextDlgGroupItem()=", eax, " *** unsupp ***">
+		ret
+		align 4
+GetNextDlgGroupItem endp
+
+GetTabbedTextExtentA proc public p1:dword, p2:dword, p3:dword, p4:dword, p5:dword
+		xor eax, eax
+		@strace <"GetTabbedTextExtentA()=", eax, " *** unsupp ***">
+		ret
+		align 4
+GetTabbedTextExtentA endp
+
+MapDialogRect proc public p1:dword, p2:dword
+		xor eax, eax
+		@strace <"MapDialogRect()=", eax, " *** unsupp ***">
+		ret
+		align 4
+MapDialogRect endp
+
+ReuseDDElParam proc public p1:dword, p2:dword, p3:dword, p4:dword, p5:dword
+		xor eax, eax
+		@strace <"ReuseDDElParam()=", eax, " *** unsupp ***">
+		ret
+		align 4
+ReuseDDElParam endp
+
 		end

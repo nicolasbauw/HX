@@ -355,6 +355,12 @@ EXPORTS
  DefFrameProcA
  TranslateMDISysAccel
  ActivateKeyboardLayout
+ CreateAcceleratorTableA
+ DestroyAcceleratorTable
+ GetNextDlgGroupItem
+ GetTabbedTextExtentA
+ MapDialogRect
+ ReuseDDElParam
  BeginDeferWindowPos
  DeferWindowPos
  EndDeferWindowPos

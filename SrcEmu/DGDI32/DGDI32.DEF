@@ -220,6 +220,20 @@ EXPORTS
  CreatePenIndirect
  GetBkMode
  GetStretchBltMode
+ ArcTo
+ ExtSelectClipRgn
+ GetPolyFillMode
+ PolyBezierTo
+ PolyDraw
+ PolylineTo
+ SelectClipPath
+ SetArcDirection
+ SetColorAdjustment
+ SetMapperFlags
+ SetPolyFillMode
+ SetTextCharacterExtra
+ SetTextJustification
+ GetEnhMetaFileDescriptionA
  CreateHatchBrush
  CreateDIBPatternBrushPt
  CreateRoundRectRgn

@@ -96,4 +96,105 @@ CreateRoundRectRgn proc public nLeft:SDWORD, nTop:SDWORD, nRight:SDWORD, nBottom
 CreateRoundRectRgn endp
 
 
+
+;--- not implemented (programs import them, mostly MFC based ones: they only need to load)
+
+ArcTo proc public p1:dword, p2:dword, p3:dword, p4:dword, p5:dword, p6:dword, p7:dword, p8:dword, p9:dword
+		xor eax, eax
+		@strace <"ArcTo()=", eax, " *** unsupp ***">
+		ret
+		align 4
+ArcTo endp
+
+ExtSelectClipRgn proc public p1:dword, p2:dword, p3:dword
+		xor eax, eax
+		@strace <"ExtSelectClipRgn()=", eax, " *** unsupp ***">
+		ret
+		align 4
+ExtSelectClipRgn endp
+
+GetPolyFillMode proc public p1:dword
+		xor eax, eax
+		@strace <"GetPolyFillMode()=", eax, " *** unsupp ***">
+		ret
+		align 4
+GetPolyFillMode endp
+
+PolyBezierTo proc public p1:dword, p2:dword, p3:dword
+		xor eax, eax
+		@strace <"PolyBezierTo()=", eax, " *** unsupp ***">
+		ret
+		align 4
+PolyBezierTo endp
+
+PolyDraw proc public p1:dword, p2:dword, p3:dword, p4:dword
+		xor eax, eax
+		@strace <"PolyDraw()=", eax, " *** unsupp ***">
+		ret
+		align 4
+PolyDraw endp
+
+PolylineTo proc public p1:dword, p2:dword, p3:dword
+		xor eax, eax
+		@strace <"PolylineTo()=", eax, " *** unsupp ***">
+		ret
+		align 4
+PolylineTo endp
+
+SelectClipPath proc public p1:dword, p2:dword
+		xor eax, eax
+		@strace <"SelectClipPath()=", eax, " *** unsupp ***">
+		ret
+		align 4
+SelectClipPath endp
+
+SetArcDirection proc public p1:dword, p2:dword
+		xor eax, eax
+		@strace <"SetArcDirection()=", eax, " *** unsupp ***">
+		ret
+		align 4
+SetArcDirection endp
+
+SetColorAdjustment proc public p1:dword, p2:dword
+		xor eax, eax
+		@strace <"SetColorAdjustment()=", eax, " *** unsupp ***">
+		ret
+		align 4
+SetColorAdjustment endp
+
+SetMapperFlags proc public p1:dword, p2:dword
+		xor eax, eax
+		@strace <"SetMapperFlags()=", eax, " *** unsupp ***">
+		ret
+		align 4
+SetMapperFlags endp
+
+SetPolyFillMode proc public p1:dword, p2:dword
+		xor eax, eax
+		@strace <"SetPolyFillMode()=", eax, " *** unsupp ***">
+		ret
+		align 4
+SetPolyFillMode endp
+
+SetTextCharacterExtra proc public p1:dword, p2:dword
+		xor eax, eax
+		@strace <"SetTextCharacterExtra()=", eax, " *** unsupp ***">
+		ret
+		align 4
+SetTextCharacterExtra endp
+
+SetTextJustification proc public p1:dword, p2:dword, p3:dword
+		xor eax, eax
+		@strace <"SetTextJustification()=", eax, " *** unsupp ***">
+		ret
+		align 4
+SetTextJustification endp
+
+GetEnhMetaFileDescriptionA proc public p1:dword, p2:dword, p3:dword
+		xor eax, eax
+		@strace <"GetEnhMetaFileDescriptionA()=", eax, " *** unsupp ***">
+		ret
+		align 4
+GetEnhMetaFileDescriptionA endp
+
 		end

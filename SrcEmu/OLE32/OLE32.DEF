@@ -5,6 +5,10 @@ EXPORTS
  CLSIDFromProgID
  CoBuildVersion
  IsEqualGUID
+ IsAccelerator
+ OleDraw
+ OleSetMenuDescriptor
+ StringFromCLSID
  CLSIDFromString
  CoCreateGuid
  CoCreateInstance
