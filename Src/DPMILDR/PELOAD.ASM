@@ -2158,9 +2158,16 @@ nextblock:						;<---
 	pop esi
 	pop ecx
 	mov eax,[esi].IMAGE_BASE_RELOCATION.SizeOfBlock
+;--- a block smaller than its header (size 0 in padding after the
+;--- last block, as in UPX-packed DLLs) ends the table; so does a
+;--- remainder too small for a block header
+	cmp eax, sizeof IMAGE_BASE_RELOCATION
+	jb done
 	add esi, eax
 	sub ecx, eax
-	ja nextblock
+	jbe done
+	cmp ecx, sizeof IMAGE_BASE_RELOCATION
+	jae nextblock
 done:
 	clc
 exit:

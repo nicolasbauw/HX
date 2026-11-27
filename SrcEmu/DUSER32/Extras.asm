@@ -139,25 +139,11 @@ DrawFrameControl proc public hdc:dword, lprc:ptr RECT, uType:dword, uState:dword
 		align 4
 DrawFrameControl endp
 
-;--- dialogs have no controls
-
-CheckRadioButton proc public hDlg:dword, nIDFirstButton:dword, nIDLastButton:dword, nIDCheckButton:dword
-		@mov eax, 1
-		ret
-		align 4
-CheckRadioButton endp
-
 DefDlgProcA proc public hDlg:dword, msg:dword, wParam:dword, lParam:dword
 		invoke DefWindowProcA, hDlg, msg, wParam, lParam
 		ret
 		align 4
 DefDlgProcA endp
-
-CreateDialogIndirectParamA proc public hInstance:dword, lpTemplate:ptr, hWndParent:dword, lpDialogFunc:dword, dwInitParam:dword
-		xor eax, eax
-		ret
-		align 4
-CreateDialogIndirectParamA endp
 
 SetMessageQueue proc public cMessagesMax:dword
 		@mov eax, 1
