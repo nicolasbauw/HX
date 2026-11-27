@@ -17,7 +17,7 @@ endif
 
 		.DATA
 
-;--- dialogs run without a dialog manager: no control is created. The dialog is a real, hidden
+;--- dialogs run without a real dialog manager. The dialog is a real, hidden
 ;--- window (so that SendMessage(hDlg, WM_SETICON...), GetWindowRect(hDlg) and the like work) of the
 ;--- class "HXDlg", whose window procedure hands every message to the dialog procedure (DefWindowProc
 ;--- if it returns FALSE). The template is only read to find the default push button: the dialog
@@ -26,7 +26,11 @@ endif
 ;--- until it calls EndDialog(). A modeless dialog (CreateDialogParam) gets WM_INITDIALOG, and the
 ;--- WM_COMMAND of its default button is posted to its window. The check state of buttons set by
 ;--- CheckDlgButton/CheckRadioButton/BM_SETCHECK is kept, so IsDlgButtonChecked reads back the
-;--- defaults chosen by the program. If the window of a modal dialog cannot be created, the
+;--- defaults chosen by the program. Each item of the template becomes a hidden child window of
+;--- the class "HXCtl" (with its id, style and text), so that GetDlgItem finds it: it keeps its
+;--- text, its check state, the strings, item data and selection of a combo or list box and the
+;--- position of a trackbar, which is what the dialog procedures of demos (and MFC's DDX_ functions)
+;--- read back. Nothing is drawn. If the window of a modal dialog cannot be created, the
 ;--- "window handle" is a pointer to the DLGSTATE on the stack of the caller and the dialog procedure
 ;--- is called directly.
 
@@ -37,6 +41,15 @@ endif
 ?BMGETCHECK	equ 0F0h
 ?BMSETCHECK	equ 0F1h
 ?NCDESTROY	equ 82h
+?MAXITEMS	equ 64
+
+;--- window extra bytes of a control
+CTL_CHECK	equ 0
+CTL_CURSEL	equ 4
+CTL_COUNT	equ 8
+CTL_ITEMS	equ 12		;?MAXITEMS * (pszText, dwData)
+CTL_POS		equ 16
+CTL_EXTRA	equ 20
 
 DLGSTATE struct
 pPrev		dd ?		;enclosing modal dialog / next modeless dialog
@@ -50,7 +63,9 @@ DLGSTATE ends
 
 g_pDlg		dd 0		;innermost modal dialog
 g_pModeless	dd 0		;modeless dialogs
-g_bDlgClass	dd 0		;class "HXDlg" registered
+g_bDlgClass	dd 0		;classes "HXDlg" and "HXCtl" registered
+
+IsWindow proto :dword
 
 		.code
 
@@ -113,6 +128,10 @@ local	hInst:dword
 			mov wc.hInstance, eax
 			mov wc.lpszClassName, CStr("HXDlg")
 			invoke RegisterClassA, addr wc
+			mov wc.lpfnWndProc, offset _CtlWndProc
+			mov wc.cbWndExtra, CTL_EXTRA
+			mov wc.lpszClassName, CStr("HXCtl")
+			invoke RegisterClassA, addr wc
 			mov g_bDlgClass, 1
 		.endif
 		invoke CreateWindowExA, 0, CStr("HXDlg"), CStr(""), WS_POPUP, 0, 0, 0, 0, hwndParent, 0, hInst, 0
@@ -125,6 +144,273 @@ local	hInst:dword
 		ret
 		align 4
 _DlgCreateWindow endp
+
+;--- the controls: hidden child windows of the class "HXCtl"
+
+;--- address of the item array of a control (allocated on first use), or 0
+
+_CtlItems proc hWnd:dword
+		invoke GetWindowLongA, hWnd, CTL_ITEMS
+		.if (!eax)
+			invoke LocalAlloc, LMEM_FIXED or LMEM_ZEROINIT, ?MAXITEMS * 8
+			.if (eax)
+				push eax
+				invoke SetWindowLongA, hWnd, CTL_ITEMS, eax
+				pop eax
+			.endif
+		.endif
+		ret
+		align 4
+_CtlItems endp
+
+;--- index of the item whose text is pszText (no case), searched from index dwStart+1, or -1
+
+_CtlFind proc uses ebx esi edi hWnd:dword, dwStart:dword, pszText:ptr byte
+		invoke GetWindowLongA, hWnd, CTL_COUNT
+		mov edi, eax
+		invoke GetWindowLongA, hWnd, CTL_ITEMS
+		mov esi, eax
+		mov ebx, dwStart
+		inc ebx
+		.if (ebx >= edi)
+			xor ebx, ebx
+		.endif
+		.if (esi && pszText)
+			.while (ebx < edi)
+				mov eax, [esi+ebx*8]
+				.if (eax)
+					invoke lstrcmpi, eax, pszText
+					.if (!eax)
+						mov eax, ebx
+						jmp done
+					.endif
+				.endif
+				inc ebx
+			.endw
+		.endif
+		mov eax, -1
+done:
+		ret
+		align 4
+_CtlFind endp
+
+_CtlWndProc proc uses ebx esi hWnd:dword, msg:dword, wParam:dword, lParam:dword
+
+		mov eax, msg
+		.if (eax == WM_SETTEXT)
+			invoke SetWindowTextA, hWnd, lParam
+			mov eax, 1
+		.elseif (eax == WM_GETTEXT)
+			invoke GetWindowTextA, hWnd, lParam, wParam
+		.elseif (eax == WM_GETTEXTLENGTH)
+			invoke GetWindowTextLengthA, hWnd
+		.elseif (eax == ?BMGETCHECK)
+			invoke GetWindowLongA, hWnd, CTL_CHECK
+		.elseif (eax == ?BMSETCHECK)
+			invoke SetWindowLongA, hWnd, CTL_CHECK, wParam
+			xor eax, eax
+		.elseif ((eax == 143h) || (eax == 14Ah) || (eax == 180h) || (eax == 181h))
+			;CB_ADDSTRING, CB_INSERTSTRING, LB_ADDSTRING, LB_INSERTSTRING (appended)
+			invoke GetWindowLongA, hWnd, CTL_COUNT
+			mov ebx, eax
+			.if (ebx >= ?MAXITEMS)
+				mov eax, -1
+				jmp done
+			.endif
+			invoke _CtlItems, hWnd
+			.if (!eax)
+				mov eax, -1
+				jmp done
+			.endif
+			mov esi, eax
+			mov dword ptr [esi+ebx*8], 0
+			mov dword ptr [esi+ebx*8+4], 0
+			.if (lParam >= 10000h)
+				invoke lstrlen, lParam
+				inc eax
+				invoke LocalAlloc, LMEM_FIXED, eax
+				.if (eax)
+					mov [esi+ebx*8], eax
+					invoke lstrcpy, eax, lParam
+				.endif
+			.endif
+			lea eax, [ebx+1]
+			invoke SetWindowLongA, hWnd, CTL_COUNT, eax
+			mov eax, ebx
+		.elseif ((eax == 146h) || (eax == 18Bh))	;CB_GETCOUNT, LB_GETCOUNT
+			invoke GetWindowLongA, hWnd, CTL_COUNT
+		.elseif ((eax == 147h) || (eax == 188h))	;CB_GETCURSEL, LB_GETCURSEL
+			invoke GetWindowLongA, hWnd, CTL_CURSEL
+		.elseif ((eax == 14Eh) || (eax == 186h))	;CB_SETCURSEL, LB_SETCURSEL
+			invoke GetWindowLongA, hWnd, CTL_COUNT
+			mov ebx, wParam
+			.if (ebx >= eax)
+				mov ebx, -1
+			.endif
+			invoke SetWindowLongA, hWnd, CTL_CURSEL, ebx
+			mov eax, ebx
+		.elseif ((eax == 14Bh) || (eax == 184h))	;CB_RESETCONTENT, LB_RESETCONTENT
+			invoke SetWindowLongA, hWnd, CTL_COUNT, 0
+			invoke SetWindowLongA, hWnd, CTL_CURSEL, -1
+			xor eax, eax
+		.elseif ((eax == 144h) || (eax == 182h))	;CB_DELETESTRING, LB_DELETESTRING: the last one only
+			invoke GetWindowLongA, hWnd, CTL_COUNT
+			.if (eax)
+				dec eax
+				push eax
+				invoke SetWindowLongA, hWnd, CTL_COUNT, eax
+				pop eax
+			.else
+				mov eax, -1
+			.endif
+		.elseif ((eax == 148h) || (eax == 189h) || (eax == 149h) || (eax == 18Ah))
+			;CB_GETLBTEXT, LB_GETTEXT, CB_GETLBTEXTLEN, LB_GETTEXTLEN
+			invoke GetWindowLongA, hWnd, CTL_COUNT
+			mov ebx, wParam
+			.if (ebx >= eax)
+				mov eax, -1
+				jmp done
+			.endif
+			invoke GetWindowLongA, hWnd, CTL_ITEMS
+			mov esi, [eax+ebx*8]
+			xor eax, eax
+			.if (esi)
+				.if ((msg == 148h) || (msg == 189h))
+					invoke lstrcpy, lParam, esi
+				.endif
+				invoke lstrlen, esi
+			.elseif ((msg == 148h) || (msg == 189h))
+				mov ecx, lParam
+				mov byte ptr [ecx], 0
+			.endif
+		.elseif ((eax == 150h) || (eax == 199h) || (eax == 151h) || (eax == 19Ah))
+			;CB_GETITEMDATA, LB_GETITEMDATA, CB_SETITEMDATA, LB_SETITEMDATA
+			invoke GetWindowLongA, hWnd, CTL_COUNT
+			mov ebx, wParam
+			.if (ebx >= eax)
+				mov eax, -1
+				jmp done
+			.endif
+			invoke GetWindowLongA, hWnd, CTL_ITEMS
+			lea esi, [eax+ebx*8+4]
+			.if ((msg == 150h) || (msg == 199h))
+				mov eax, [esi]
+			.else
+				mov eax, lParam
+				mov [esi], eax
+				mov eax, 1
+			.endif
+		.elseif ((eax == 158h) || (eax == 14Ch) || (eax == 1A2h) || (eax == 18Fh))
+			;CB_FINDSTRINGEXACT, CB_FINDSTRING, LB_FINDSTRINGEXACT, LB_FINDSTRING (whole strings)
+			invoke _CtlFind, hWnd, wParam, lParam
+		.elseif ((eax == 14Dh) || (eax == 18Ch))	;CB_SELECTSTRING, LB_SELECTSTRING
+			invoke _CtlFind, hWnd, wParam, lParam
+			.if (eax != -1)
+				push eax
+				invoke SetWindowLongA, hWnd, CTL_CURSEL, eax
+				pop eax
+			.endif
+		.elseif (eax == 400h)				;TBM_GETPOS
+			invoke GetWindowLongA, hWnd, CTL_POS
+		.elseif (eax == 405h)				;TBM_SETPOS
+			invoke SetWindowLongA, hWnd, CTL_POS, lParam
+			xor eax, eax
+		.else
+			invoke DefWindowProcA, hWnd, msg, wParam, lParam
+		.endif
+done:
+		ret
+		align 4
+_CtlWndProc endp
+
+;--- create the controls of a template as children of the dialog, ebx = DLGSTATE
+
+_DlgCreateControls proc uses esi edi pTemplate:dword
+
+local	dwCount:dword
+local	dwStyle:dword
+local	dwId:dword
+local	bEx:dword
+local	hInst:dword
+local	szText[128]:byte
+
+		mov esi, pTemplate
+		and esi, esi
+		jz done
+		cmp [ebx].DLGSTATE.hDlg, 0
+		jz done
+		invoke GetModuleHandleA, 0
+		mov hInst, eax
+		mov bEx, 0
+		.if (dword ptr [esi] == 0FFFF0001h)	;DLGTEMPLATEEX
+			mov bEx, 1
+			mov edx, [esi+12]
+			movzx ecx, word ptr [esi+16]
+			add esi, 26
+		.else
+			mov edx, [esi]
+			movzx ecx, word ptr [esi+8]
+			add esi, 18
+		.endif
+		cmp ecx, 256
+		jnc done
+		mov dwCount, ecx
+		call _SkipSzOrd		;menu
+		call _SkipSzOrd		;class
+		call _SkipSzOrd		;title
+		.if (edx & ?SETFONT)
+			.if (bEx)
+				add esi, 6
+			.else
+				add esi, 2
+			.endif
+			call _SkipSzOrd
+		.endif
+		.while (dwCount)
+			add esi, 3
+			and esi, not 3
+			.if (bEx)
+				mov eax, [esi+8]
+				movzx ecx, word ptr [esi+20]
+				add esi, 24
+			.else
+				mov eax, [esi]
+				movzx ecx, word ptr [esi+16]
+				add esi, 18
+			.endif
+			and eax, not WS_VISIBLE
+			or eax, WS_CHILD
+			mov dwStyle, eax
+			mov dwId, ecx
+			call _SkipSzOrd		;class
+			;--- text: string (WCHAR, narrowed) or ordinal (no text)
+			mov szText, 0
+			.if (word ptr [esi] == 0FFFFh)
+				add esi, 4
+			.else
+				lea edi, szText
+				xor ecx, ecx
+				.repeat
+					lodsw
+					.if (ecx < sizeof szText - 1)
+						stosb
+						inc ecx
+					.endif
+				.until (ax == 0)
+				mov byte ptr [edi], 0
+			.endif
+			movzx eax, word ptr [esi]
+			lea esi, [esi+eax+2]	;creation data
+			invoke CreateWindowExA, 0, CStr("HXCtl"), addr szText, dwStyle, 0, 0, 0, 0, [ebx].DLGSTATE.hDlg, dwId, hInst, 0
+			.if (eax)
+				invoke SetWindowLongA, eax, CTL_CURSEL, -1
+			.endif
+			dec dwCount
+		.endw
+done:
+		ret
+		align 4
+_DlgCreateControls endp
 
 ;--- template of a dialog resource (0 if not found)
 
@@ -241,6 +527,7 @@ local	dwDefId:dword
 			invoke _DlgDefButton, pTemplate
 			mov dwDefId, eax
 			invoke _DlgCreateWindow, hwndParent
+			invoke _DlgCreateControls, pTemplate
 			invoke _DlgSend, ebx, WM_INITDIALOG, 0, dwInitParm
 			.if ((!dlg.bEnded) && (dwDefId != IDOK))
 				invoke _DlgSend, ebx, WM_COMMAND, dwDefId, 0
@@ -339,6 +626,7 @@ _CreateModeless proc uses ebx pTemplate:dword, hwndParent:dword, lpDialogProc:dw
 		mov eax, g_pModeless
 		mov [ebx].DLGSTATE.pPrev, eax
 		mov g_pModeless, ebx
+		invoke _DlgCreateControls, pTemplate
 		invoke SendMessageA, [ebx].DLGSTATE.hDlg, WM_INITDIALOG, 0, dwInitParm
 		mov eax, [ebx].DLGSTATE.hDlg
 		.if (eax)
@@ -436,20 +724,45 @@ _DlgCheckEntry endp
 ;--- dlg items
 
 GetDlgItem proc public hDlg:dword, dwId:dword
-		xor eax, eax
-		@strace	<"GetDlgItem(", hDlg, ", ", dwId, ")=", eax, " *** unsupp ***">
+		invoke _DlgState, hDlg
+		.if (eax)
+			mov eax, [eax].DLGSTATE.hDlg
+		.else
+			invoke IsWindow, hDlg	;a window of another class (dialog of its own)
+			.if (eax)
+				mov eax, hDlg
+			.endif
+		.endif
+		.if (eax)
+			mov eax, [eax].WNDOBJ.hwndChilds
+			.while (eax)
+				mov ecx, [eax].WNDOBJ.hMenu
+				.break .if (cx == word ptr dwId)
+				mov eax, [eax].WNDOBJ.hwndSibling
+			.endw
+		.endif
+		@strace	<"GetDlgItem(", hDlg, ", ", dwId, ")=", eax>
 		ret
 		align 4
 GetDlgItem endp
 
 GetDlgCtrlID proc public hwndCtrl:dword
 		xor eax, eax
-		@strace	<"GetDlgCtrlID(", hwndCtrl, ")=", eax, " *** unsupp ***">
+		invoke IsWindow, hwndCtrl
+		.if (eax)
+			mov eax, hwndCtrl
+			mov eax, [eax].WNDOBJ.hMenu
+		.endif
+		@strace	<"GetDlgCtrlID(", hwndCtrl, ")=", eax>
 		ret
 		align 4
 GetDlgCtrlID endp
 
 CheckDlgButton proc public hDlg:dword, dwId:dword, uCheck:dword
+		invoke GetDlgItem, hDlg, dwId
+		.if (eax)
+			invoke SendMessageA, eax, ?BMSETCHECK, uCheck, 0
+		.endif
 		invoke _DlgCheckEntry, hDlg, dwId, 1
 		.if (eax)
 			mov ecx, uCheck
@@ -468,6 +781,10 @@ CheckRadioButton proc public uses ebx hDlg:dword, nIDFirstButton:dword, nIDLastB
 			.if (eax)
 				mov word ptr [eax+2], 0
 			.endif
+			invoke GetDlgItem, hDlg, ebx
+			.if (eax)
+				invoke SendMessageA, eax, ?BMSETCHECK, 0, 0
+			.endif
 			inc ebx
 			.break .if (ebx > 0FFFFh)
 		.endw
@@ -478,9 +795,14 @@ CheckRadioButton proc public uses ebx hDlg:dword, nIDFirstButton:dword, nIDLastB
 CheckRadioButton endp
 
 IsDlgButtonChecked proc public hDlg:dword, dwId:dword
-		invoke _DlgCheckEntry, hDlg, dwId, 0
+		invoke GetDlgItem, hDlg, dwId
 		.if (eax)
-			movzx eax, word ptr [eax+2]
+			invoke SendMessageA, eax, ?BMGETCHECK, 0, 0
+		.else
+			invoke _DlgCheckEntry, hDlg, dwId, 0
+			.if (eax)
+				movzx eax, word ptr [eax+2]
+			.endif
 		.endif
 		@strace	<"IsDlgButtonChecked(", hDlg, ", ", dwId, ")=", eax>
 		ret
@@ -564,7 +886,7 @@ SendDlgItemMessageA proc public uses ebx hDlg:dword, dwID:dword, msg:DWORD, wPar
 		.else
 			invoke GetDlgItem, hDlg, dwID
 			.if (eax)
-				invoke SendMessage, eax, msg, wParam, lParam
+				invoke SendMessageA, eax, msg, wParam, lParam
 			.endif
 		.endif
 		@strace	<"SendDlgItemMessage(", hDlg, ", ", dwID, ", ", msg, ", ", wParam, ", ", lParam, ")=", eax>

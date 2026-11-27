@@ -112,6 +112,7 @@ g_hwndLock		dd 0		;locked window (LockWindowUpdate)
 externdef g_SysMenu:MENUOBJ
 
 _ClearOutsideRegion proto hwnd:dword
+_CallCbtCreate proto hwnd:dword, lpcs:ptr
 
 		.CODE
 
@@ -277,6 +278,15 @@ endif
 				push hMenu
 				push hInstance
 				push lpCreateParams
+;--- WH_CBT hook (HCBT_CREATEWND): MFC attaches and subclasses the window here
+				mov ecx, esp
+				invoke _CallCbtCreate, ebx, ecx
+				.if (eax)
+					add esp, 12*4
+					invoke DestroyWindow, ebx
+					xor eax, eax
+					jmp @exit
+				.endif
 				invoke SendMessageA, ebx, WM_CREATE, 0, esp
 				add esp, 12*4		; sizeof CREATESTRUCT
 				@strace <"CreateWindowEx: WM_CREATE returned ", eax, " ebx=", ebx>

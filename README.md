@@ -274,6 +274,25 @@ values are returned as such by the W function and converted to ANSI by the A fun
 or in place if the caller's buffer has none). Tested with `c/tests/win32/version.c` of
 [Bare86](https://github.com/nicolasbauw/bare86) (test `hx_version`).
 
+### 14. Window hooks and dialog controls (DUSER32)
+
+**Symptom.** Programs built with MFC stopped at once: “abnormal program termination” (a `CMemoryException` thrown by
+`AfxHookWindowCreate`) or, once past that, “An unsupported operation was attempted” (`DDX_` functions of a dialog that
+finds no control). Other programs said “could not set window hook”.
+
+**Change.** `SrcEmu/DUSER32/WINHOOK.ASM`: `SetWindowsHookExA` keeps the hooks in a table (16 entries) and returns a handle,
+`UnhookWindowsHookEx` removes one, `CallNextHookEx` calls the next older hook of the same type. Only `WH_CBT` hooks are
+called: `CreateWindowExA` (`WINDOWS.ASM`) calls the newest one with `HCBT_CREATEWND` (window, `CBT_CREATEWND` with the
+`CREATESTRUCT`) before `WM_CREATE`, which is where MFC attaches its `CWnd` and subclasses the window; a non-zero result
+destroys the window. The other hooks (keyboard, message filters...) are accepted and never called.
+`SrcEmu/DUSER32/Dlgbox.asm`: each item of a dialog template becomes a hidden child window of the class `HXCtl` (style,
+id, text), so `GetDlgItem` and `GetDlgCtrlID` work; the window keeps its text (`WM_SETTEXT`, `WM_GETTEXT`), its check state
+(`BM_SETCHECK`, `BM_GETCHECK`, also used by `CheckDlgButton`...), the strings, item data and selection of a combo or list
+box (`CB_`/`LB_` `ADDSTRING`, `INSERTSTRING` (appended), `GETCOUNT`, `SETCURSEL`, `GETCURSEL`, `GETLBTEXT`, `GETTEXT`,
+`SETITEMDATA`, `GETITEMDATA`, `FINDSTRING(EXACT)` (whole strings), `SELECTSTRING`, `RESETCONTENT`) and the position of a
+trackbar (`TBM_SETPOS`, `TBM_GETPOS`). Nothing is drawn. Tested with `c/tests/win32/dialog.c` of
+[Bare86](https://github.com/nicolasbauw/bare86) (test `hx_dialog`); the MFC demos `moments` and `mosaik` start.
+
 ## Building
 
 HX's own build needs Open Watcom's `wmake` or `nmake`, JWasm, JWlink and a DOS or
