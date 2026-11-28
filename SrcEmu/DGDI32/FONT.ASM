@@ -345,6 +345,14 @@ CreateFontIndirectA proc public lpLogFont:ptr LOGFONTA
 
 		@strace <"CreateFontIndirectA(", lpLogFont, ") enter">
         invoke _FindFontResource, lpLogFont
+;--- no font resource (DOS: none without AddFontResource): Windows maps any request to the
+;--- closest font, so the OEM fixed font (built from INT 43h) is used instead of failing.
+        .if (!eax)
+        	invoke GetStockObject, OEM_FIXED_FONT
+        	.if (eax)
+        		mov eax, [eax].FONTOBJ.pFontRes
+        	.endif
+        .endif
         .if (eax)
         	push eax
             invoke _GDImalloc2, sizeof FONTOBJ

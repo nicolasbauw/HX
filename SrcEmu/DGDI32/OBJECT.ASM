@@ -195,6 +195,10 @@ GetObjectA proc public uses esi hObject:DWORD, cbBuffer:DWORD, pBuffer:ptr BYTE
 				mov eax, [esi].BITMAPINFOHEADER.biWidth
 				mov [edx].BITMAP.bmWidth, eax
 				mov eax, [esi].BITMAPINFOHEADER.biHeight
+;--- bmHeight is positive on Windows (a top-down bitmap keeps its sign in dsBmih.biHeight only)
+				.if (sdword ptr eax < 0)
+					neg eax
+				.endif
 				mov [edx].BITMAP.bmHeight, eax
 				mov eax, [esi].BITMAPINFOHEADER.biWidth
 				push edx

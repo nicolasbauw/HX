@@ -129,6 +129,22 @@ endif
 
 CreateBitmap endp
 
+;--- CreateBitmapIndirect: CreateBitmap with the fields of a BITMAP
+;--- (bmWidth +4, bmHeight +8, bmPlanes +16, bmBitsPixel +18, bmBits +20)
+
+CreateBitmapIndirect proc public pBitmap:ptr
+		mov edx, pBitmap
+		xor eax, eax
+		.if (edx)
+			movzx ecx, word ptr [edx+16]
+			movzx eax, word ptr [edx+18]
+			invoke CreateBitmap, dword ptr [edx+4], dword ptr [edx+8], ecx, eax, dword ptr [edx+20]
+		.endif
+		@strace <"CreateBitmapIndirect(", pBitmap, ")=", eax>
+		ret
+		align 4
+CreateBitmapIndirect endp
+
 GetBitmapBits proc public uses esi hBitmap:DWORD, cbBuffer:DWORD, lpvBits:ptr
 
 local	bmih:BITMAPINFOHEADER

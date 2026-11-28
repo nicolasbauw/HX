@@ -380,6 +380,19 @@ filled on its own, not their union with the fill mode), `RoundRect` draws a rect
 `c/tests/win32/dialog.c` and `smallfuncs.c` of [Bare86](https://github.com/nicolasbauw/bare86) (tests `hx_dialog`,
 `hx_smallfuncs`); the demos `wireworld` and `trx-elec` run.
 
+### 20. CreateBitmapIndirect, bitmap height, fonts without font resources (DGDI32)
+
+**Symptom.** A 64k intro (`addlib`) did not start (`CreateBitmapIndirect` missing), then stopped on “Out Of Memory !”.
+
+**Cause.** DGDI32 had no `CreateBitmapIndirect`; `GetObject` gave a bitmap's height with the sign of HX's top-down
+bitmaps (negative), so `bmWidthBytes * bmHeight` asked for a negative size; `CreateFontIndirect` failed whenever no font
+resource is loaded (the usual case under DOS: only the OEM fixed font, built from INT 43h, exists).
+
+**Change.** `SrcEmu/DGDI32/BITMAP2.ASM`: `CreateBitmapIndirect` (`CreateBitmap` with the fields of the `BITMAP`).
+`OBJECT.ASM` (`GetObjectA`): `bmHeight` is positive, as on Windows. `FONT.ASM` (`CreateFontIndirectA`): when no font
+resource matches, the font uses the OEM fixed font (Windows maps any request to the closest font). Tested with
+`c/tests/win32/smallfuncs.c` of [Bare86](https://github.com/nicolasbauw/bare86) (test `hx_smallfuncs`); `addlib` runs.
+
 ## Building
 
 HX's own build needs Open Watcom's `wmake` or `nmake`, JWasm, JWlink and a DOS or

@@ -17,6 +17,7 @@ EXPORT {
  CopyMetaFileA
  CopyMetaFileW
  CreateBitmap
+ CreateBitmapIndirect
  CreateBrushIndirect
  CreateColorSpaceA
  CreateColorSpaceW
