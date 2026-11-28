@@ -338,6 +338,22 @@ stopped on a division error.
 DKRNL32 is built by the new `build-linux/build-dkrnl32.sh` (the "SBEMU" variant of `HX\BIN`, `PE HX` format; all the modules
 are linked, so it is 1 KB larger than the official one, which comes from a static library).
 
+### 18. Standard control classes and display settings (DUSER32)
+
+**Symptom.** Demos that build their setup window themselves (`CreateWindowEx("BUTTON", ...)`, combo boxes...) showed an
+empty window and waited forever; others refused every mode (“800x600:32@60: This fullscreen mode is not supported”).
+
+**Cause.** HX registers no standard control class, so `CreateWindowEx` failed for every control; `EnumDisplaySettings` gave
+no refresh rate and reported the 5-5-5 modes as 15 bits.
+
+**Change.** `SrcEmu/DUSER32/Dlgbox.asm` (`_StdClass`, called by `CreateWindowExA`): `BUTTON`, `STATIC`, `EDIT`, `COMBOBOX`,
+`LISTBOX`, `SCROLLBAR` and a few common controls (`msctls_trackbar32`...) are registered on first use with the window
+procedure of the dialog controls (item 14: text, check state, combo and list box contents; nothing is drawn). A push button
+created with `BS_DEFPUSHBUTTON` posts its own click (`WM_COMMAND`, `BN_CLICKED`) to its parent, as the default button of a
+dialog is pressed (item 8): the setup window starts the demo with its defaults. `SrcEmu/DUSER32/dispres.asm`:
+`EnumDisplaySettings` reports 60 Hz (`DM_DISPLAYFREQUENCY`) and 5-5-5 modes as 16 bits. Tested with
+`c/tests/win32/stdctl.c` of [Bare86](https://github.com/nicolasbauw/bare86) (test `hx_stdctl`); the demo `232` runs.
+
 ## Building
 
 HX's own build needs Open Watcom's `wmake` or `nmake`, JWasm, JWlink and a DOS or

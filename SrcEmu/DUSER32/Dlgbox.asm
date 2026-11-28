@@ -323,6 +323,82 @@ done:
 		align 4
 _CtlWndProc endp
 
+;--- standard control classes (BUTTON, STATIC, EDIT, COMBOBOX, LISTBOX...): HX has none, so a
+;--- program that builds its setup window itself got no control. They are registered on first
+;--- use (CreateWindowExA calls _StdClass) with the window procedure of the dialog controls. A
+;--- push button created with BS_DEFPUSHBUTTON in a window "clicks" itself: its WM_COMMAND
+;--- (BN_CLICKED) is posted to its parent, as the default button of a dialog is sent (the setup
+;--- window of a demo then starts with its defaults).
+
+		.const
+g_StdClasses label byte
+		db "BUTTON",0, "STATIC",0, "EDIT",0, "COMBOBOX",0, "LISTBOX",0, "SCROLLBAR",0
+		db "msctls_trackbar32",0, "msctls_updown32",0, "msctls_progress32",0, "SysListView32",0
+		db "ComboBoxEx32",0, "RichEdit",0, "RICHEDIT20A",0, 0
+		.code
+
+_StdCtlWndProc proc hWnd:dword, msg:dword, wParam:dword, lParam:dword
+
+		.if (msg == WM_CREATE)
+			mov ecx, lParam
+			mov eax, [ecx+32]		;CREATESTRUCT.style
+			and eax, 0Fh
+			mov edx, [ecx+40]		;CREATESTRUCT.lpszClass
+			.if ((eax == ?DEFPUSH) && (dword ptr [ecx+12]) && (edx >= 10000h))
+				invoke lstrcmpi, edx, CStr("BUTTON")
+				.if (!eax)
+					mov ecx, lParam
+					movzx eax, word ptr [ecx+8]	;id (hMenu), BN_CLICKED = 0
+					invoke PostMessageA, dword ptr [ecx+12], WM_COMMAND, eax, hWnd
+				.endif
+			.endif
+			invoke SetWindowLongA, hWnd, CTL_CURSEL, -1
+			xor eax, eax
+		.else
+			invoke _CtlWndProc, hWnd, msg, wParam, lParam
+		.endif
+		ret
+		align 4
+_StdCtlWndProc endp
+
+;--- register a standard control class if lpszClass names one that is not registered yet
+
+_StdClass proc public uses esi lpszClass:dword
+
+local	wc:WNDCLASS
+
+		mov eax, lpszClass
+		cmp eax, 10000h
+		jb done
+		invoke FindAtomA, eax
+		.if (eax)
+			invoke _FindClass, eax
+			and eax, eax
+			jnz done
+		.endif
+		mov esi, offset g_StdClasses
+		.while (byte ptr [esi])
+			invoke lstrcmpi, esi, lpszClass
+			.if (!eax)
+				invoke RtlZeroMemory, addr wc, sizeof WNDCLASS
+				mov wc.lpfnWndProc, offset _StdCtlWndProc
+				mov wc.cbWndExtra, CTL_EXTRA
+				invoke GetModuleHandleA, 0
+				mov wc.hInstance, eax
+				mov eax, lpszClass
+				mov wc.lpszClassName, eax
+				invoke RegisterClassA, addr wc
+				@strace <"_StdClass: registered ", &lpszClass, "=", eax>
+				jmp done
+			.endif
+			invoke lstrlen, esi
+			lea esi, [esi+eax+1]
+		.endw
+done:
+		ret
+		align 4
+_StdClass endp
+
 ;--- create the controls of a template as children of the dialog, ebx = DLGSTATE
 
 _DlgCreateControls proc uses esi edi pTemplate:dword

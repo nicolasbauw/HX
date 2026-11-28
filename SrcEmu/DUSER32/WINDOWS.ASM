@@ -113,6 +113,7 @@ externdef g_SysMenu:MENUOBJ
 
 _ClearOutsideRegion proto hwnd:dword
 _CallCbtCreate proto hwnd:dword, lpcs:ptr
+_StdClass proto lpszClass:dword
 
 		.CODE
 
@@ -130,6 +131,7 @@ ifdef _DEBUG
 		.endif
 		@strace <"CreateWindowExA(", dwExStyle, ", ", lpszClass, ", ", &ecx, ", style=", dwStyle, ", ", x, ", ", y, ", ", cx_, ", ", cy, ", ...)">
 endif
+		invoke _StdClass, lpszClass	;standard control class (BUTTON...): registered on first use
 		mov eax, lpszClass
 		.if (eax & 0FFFF0000h)
 			@strace	<"window class=", &eax>

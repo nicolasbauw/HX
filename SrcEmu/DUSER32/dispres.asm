@@ -194,13 +194,18 @@ lpDevmode	dd ?
 DISENUMHLP ends
 
 filldevmode:
+;--- as Windows: 5-5-5 modes are 16 bits, and a refresh rate is given (programs look for "...@60")
 		movzx eax,[ecx].SVGAINFO.BitsPerPixel
+		.if (eax == 15)
+			mov eax, 16
+		.endif
 		mov [edx].DEVMODEA.dmBitsPerPel, eax
 		movzx eax,[ecx].SVGAINFO.XResolution 
 		mov [edx].DEVMODEA.dmPelsWidth, eax
 		movzx eax,[ecx].SVGAINFO.YResolution 
 		mov [edx].DEVMODEA.dmPelsHeight, eax
-		mov [edx].DEVMODEA.dmFields,DM_BITSPERPEL or DM_PELSWIDTH or DM_PELSHEIGHT
+		mov [edx].DEVMODEA.dmDisplayFrequency, 60
+		mov [edx].DEVMODEA.dmFields,DM_BITSPERPEL or DM_PELSWIDTH or DM_PELSHEIGHT or 400000h	;DM_DISPLAYFREQUENCY
 		ret
 
 
