@@ -671,6 +671,13 @@ endif
 	mov [ebx].ddpfPixelFormat.dwRGBBitCount,eax
 
 	invoke SetPixelFormat
+;--- as in Windows: 8 bit modes are palettized, 15 bit modes are 16 bits with 5-5-5 masks
+	mov eax, [ebx].ddpfPixelFormat.dwRGBBitCount
+	.if (eax <= 8)
+		or [ebx].ddpfPixelFormat.dwFlags, DDPF_PALETTEINDEXED8
+	.elseif (eax == 15)
+		mov [ebx].ddpfPixelFormat.dwRGBBitCount, 16
+	.endif
 
 ;	mov [ebx].ddpfPixelFormat.dwRGBAlphaBitMask,
 ;	mov [ebx].ddpfPixelFormat.dwRGBZBitMask,

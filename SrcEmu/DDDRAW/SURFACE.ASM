@@ -1911,6 +1911,10 @@ endif
 		shl eax, cl
 		mov [ebx].DDSF.ddpfPixelFormat.dwBBitMask, eax
 exit:
+;--- DirectDraw has no 15 bit format: 16 bits with 5-5-5 masks, as Windows reports it
+		.if ([ebx].DDSF.ddpfPixelFormat.dwRGBBitCount == 15)
+			mov [ebx].DDSF.ddpfPixelFormat.dwRGBBitCount, 16
+		.endif
 		ret
 		align 4
 SetPixelFormat endp

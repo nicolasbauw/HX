@@ -7,7 +7,7 @@ program that runs DOS programs, and Windows programs through HX, on Linux.
 
 Upstream is based on v2.24 (`198ec32`). Nothing else than what is listed under
 [What this fork changes](#what-this-fork-changes) differs from it. Seven binaries
-differ from the official HX package (`DPMILD32.EXE`, `DGDI32.DLL`, `DUSER32.DLL`, `VESA32.DLL`, `WINMM.DLL`, `OLE32.DLL`, `COMCTL32.DLL`, `VERSION.DLL`)
+differ from the official HX package (`DPMILD32.EXE`, `DGDI32.DLL`, `DUSER32.DLL`, `VESA32.DLL`, `WINMM.DLL`, `OLE32.DLL`, `COMCTL32.DLL`, `VERSION.DLL`, `DDDRAW.DLL`)
 and one is added (`MSVFW32.DLL`).
 
 ## What HX is
@@ -306,6 +306,19 @@ above the bits and the text goes up in memory; a pixel outside the surface (from
 written. Pixels beyond the right edge of a row still wrap into the next row (no horizontal clipping yet). Tested with
 `c/tests/win32/textout.c` of [Bare86](https://github.com/nicolasbauw/bare86) (test `hx_textout`).
 
+### 16. DirectDraw describes display modes as Windows does (DDDRAW)
+
+**Symptom.** Programs built with OpenPTC (about ten demos) stopped with “unsupported bits per pixel” as soon as they set up
+the display.
+
+**Cause.** `EnumDisplayModes` and `GetDisplayMode` (`FillDDSD`) described the 8 bit modes as `DDPF_RGB` without
+`DDPF_PALETTEINDEXED8`, and the 5-5-5 modes of the VESA card with `dwRGBBitCount = 15`, a value DirectDraw never reports
+(Windows reports them as 16 bits with 5-5-5 masks). Surfaces also kept 15 bits, and the sizes computed from it were short.
+
+**Change.** `SrcEmu/DDDRAW/DDOBJECT.ASM` (`FillDDSD`): 8 bit modes get `DDPF_PALETTEINDEXED8`, 15 bit modes are reported as
+16 bits with their masks; `SrcEmu/DDDRAW/SURFACE.ASM` (`SetPixelFormat`): the same for surfaces. Tested with
+`c/tests/win32/ddmodes.c` of [Bare86](https://github.com/nicolasbauw/bare86) (test `hx_ddmodes`).
+
 ## Building
 
 HX's own build needs Open Watcom's `wmake` or `nmake`, JWasm, JWlink and a DOS or
@@ -329,6 +342,8 @@ build-linux/build-simple.sh comctl32 "DKRNL32.lib,DUSER32.lib" [WORK_DIR]
 # result: WORK_DIR/comctl32/out/COMCTL32.DLL
 build-linux/build-simple.sh version "DKRNL32.lib" [WORK_DIR]
 # result: WORK_DIR/version/out/VERSION.DLL
+build-linux/build-simple.sh dddraw "DKRNL32.lib,DGDI32.lib,VESA32.lib" [WORK_DIR]
+# result: WORK_DIR/dddraw/out/DDDRAW.DLL (same size as the official one when built from the unmodified sources)
 build-linux/build-vesa32.sh   [WORK_DIR]
 # result: WORK_DIR/vesa32/out/VESA32.DLL (same size as the official one when built from the unmodified sources)
 ```
@@ -348,12 +363,12 @@ images with it as with the official DLL.
 
 The other parts of HX (HDPMI, the other DLLs) are **not** rebuilt by this fork: use
 the binaries of the [official packages](https://github.com/Baron-von-Riedesel/HX/releases)
-and replace `BIN/DPMILD32.EXE`, `BIN/DGDI32.DLL`, `BIN/DUSER32.DLL`, `BIN/VESA32.DLL`, `BIN/WINMM.DLL`, `BIN/OLE32.DLL`, `BIN/COMCTL32.DLL` and `BIN/VERSION.DLL` with the ones of this fork's releases, and add `BIN/MSVFW32.DLL` (HX has none).
+and replace `BIN/DPMILD32.EXE`, `BIN/DGDI32.DLL`, `BIN/DUSER32.DLL`, `BIN/VESA32.DLL`, `BIN/WINMM.DLL`, `BIN/OLE32.DLL`, `BIN/COMCTL32.DLL`, `BIN/VERSION.DLL` and `BIN/DDDRAW.DLL` with the ones of this fork's releases, and add `BIN/MSVFW32.DLL` (HX has none).
 
 ## Use with Bare86
 
 [Bare86](https://github.com/nicolasbauw/bare86) downloads the official HX package on
-first use and checks its SHA-256. The fork's `DPMILD32.EXE`, `DGDI32.DLL`, `DUSER32.DLL`, `VESA32.DLL`, `WINMM.DLL`, `OLE32.DLL`, `COMCTL32.DLL` and `VERSION.DLL` replace the official
+first use and checks its SHA-256. The fork's `DPMILD32.EXE`, `DGDI32.DLL`, `DUSER32.DLL`, `VESA32.DLL`, `WINMM.DLL`, `OLE32.DLL`, `COMCTL32.DLL`, `VERSION.DLL` and `DDDRAW.DLL` replace the official
 ones in the same directory; both can be told apart by their SHA-256, given in each
 release's notes.
 
