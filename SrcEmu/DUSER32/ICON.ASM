@@ -45,15 +45,22 @@ CreateIcon proc public hInstance:DWORD, nWidth:DWORD, nHeight:DWORD,
 CreateIcon endp
 
 DestroyIcon proc public hIcon:DWORD
-		xor eax,eax
-		@strace	<"DestroyIcon(", hIcon, ")=", eax, " *** unsupp ***">
+		mov eax, 1
+		@strace	<"DestroyIcon(", hIcon, ")=", eax>
 		ret
         align 4
 DestroyIcon endp
 
+;--- icons are never drawn (DrawIcon/DrawIconEx do nothing): the "handle" of an icon is
+;--- the address of its resource data, so that LoadIcon, and SetClassLong(GCL_HICON) after it,
+;--- succeed as on Windows (MFC treats a NULL previous icon as an error).
+
 CreateIconFromResource proc public pResBits:ptr, dwSize:DWORD, bIcon:DWORD, dwVer:DWORD
 		xor eax, eax
-		@strace	<"CreateIconFromResource(", pResBits, ", ", dwSize, ", ", bIcon, ", ", dwVer, ")=", eax, " *** unsupp ***">
+		.if (dwSize)
+			mov eax, pResBits
+		.endif
+		@strace	<"CreateIconFromResource(", pResBits, ", ", dwSize, ", ", bIcon, ", ", dwVer, ")=", eax>
 		ret
         align 4
 CreateIconFromResource endp
@@ -61,14 +68,24 @@ CreateIconFromResource endp
 CreateIconFromResourceEx proc public pbIconBits:ptr, cbIconBits:DWORD, fIcon:DWORD,
 			dwVersion:DWORD, cxDesired:DWORD, cyDesired:DWORD, uFlags:DWORD
 		xor eax,eax
-		@strace	<"CreateIconFromResourceEx(", pbIconBits, ", ", cbIconBits, ", ", fIcon, ", ", dwVersion, ", ", cxDesired, ", ", cyDesired, ", ", uFlags, ")=", eax, " *** unsupp ***">
+		.if (cbIconBits)
+			mov eax, pbIconBits
+		.endif
+		@strace	<"CreateIconFromResourceEx(", pbIconBits, ", ", cbIconBits, ", ", fIcon, ", ", dwVersion, ", ", cxDesired, ", ", cyDesired, ", ", uFlags, ")=", eax>
 		ret
         align 4
 CreateIconFromResourceEx endp
 
 LoadIconA proc public uses ebx hInstance:HINSTANCE, lpIconName:ptr BYTE
 
+local	dwSysIcon:dword
+
+		mov dwSysIcon, 0
         .if (!hInstance)
+        	mov eax, lpIconName
+        	.if (eax < 10000h)
+        		mov dwSysIcon, eax	;IDI_xxx
+        	.endif
         	mov ecx, g_hInstance
             mov hInstance, ecx
             mov edx, lpIconName
@@ -92,14 +109,19 @@ else
         invoke FindResource, hInstance, lpIconName, RT_ICON
 endif       
         .if (eax)
+        	mov ebx, eax		;HRSRC of the RT_ICON resource
         	invoke LoadResource, hInstance, eax
             .if (eax)
             	push eax
-                invoke SizeofResource, hInstance, eax
+                invoke SizeofResource, hInstance, ebx
                 mov ecx, eax
                 pop eax
             	invoke CreateIconFromResource, eax, ecx, TRUE, ?FORMVER
             .endif
+        .endif
+;--- system icons (IDI_APPLICATION...) are not in DUSER32: their id is their "handle"
+        .if ((!eax) && (dwSysIcon))
+        	mov eax, dwSysIcon
         .endif
 		@strace	<"LoadIconA(", hInstance, ", ", lpIconName, ")=", eax>
 		ret
@@ -107,8 +129,8 @@ endif
 LoadIconA endp
 
 CopyIcon proc public hIcon:DWORD
-		xor eax, eax
-		@strace	<"CopyIcon(", hIcon, ")=", eax, " *** unsupp ***">
+		mov eax, hIcon
+		@strace	<"CopyIcon(", hIcon, ")=", eax>
 		ret
         align 4
 CopyIcon endp

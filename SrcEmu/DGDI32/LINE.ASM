@@ -208,12 +208,42 @@ Polygon proc public hdc:dword, lppt:ptr POINT, cCount:DWORD
         align 4
 Polygon endp
 
-PolyPolyline proc public hdc:dword, lppt:ptr POINT, lpdwPolyPoints: ptr DWORD, cCount:DWORD
-		xor eax, eax
-		@strace <"PolyPolyline(", hdc, ", ", lppt, ", ", lpdwPolyPoints, ", ", cCount, ")=", eax, " *** unsupp">
+;--- PolyPolyline/PolyPolygon: one Polyline/Polygon per figure (PolyPolygon fills each
+;--- polygon on its own, not the union with the polygon fill mode as Windows does)
+
+PolyPolyline proc public uses esi edi ebx hdc:dword, lppt:ptr POINT, lpdwPolyPoints: ptr DWORD, cCount:DWORD
+		mov esi, lppt
+		mov edi, lpdwPolyPoints
+		mov ebx, cCount
+		.while (ebx)
+			invoke Polyline, hdc, esi, dword ptr [edi]
+			mov eax, [edi]
+			lea esi, [esi+eax*sizeof POINT]
+			add edi, 4
+			dec ebx
+		.endw
+		mov eax, 1
+		@strace <"PolyPolyline(", hdc, ", ", lppt, ", ", lpdwPolyPoints, ", ", cCount, ")=", eax>
 		ret
         align 4
 PolyPolyline endp
+
+PolyPolygon proc public uses esi edi ebx hdc:dword, lppt:ptr POINT, lpPolyCounts: ptr DWORD, nCount:DWORD
+		mov esi, lppt
+		mov edi, lpPolyCounts
+		mov ebx, nCount
+		.while (ebx)
+			invoke Polygon, hdc, esi, dword ptr [edi]
+			mov eax, [edi]
+			lea esi, [esi+eax*sizeof POINT]
+			add edi, 4
+			dec ebx
+		.endw
+		mov eax, 1
+		@strace <"PolyPolygon(", hdc, ", ", lppt, ", ", lpPolyCounts, ", ", nCount, ")=", eax>
+		ret
+        align 4
+PolyPolygon endp
 
 Rectangle proc public uses ebx hdc:dword, nLeft:dword, nTop:dword, nRight:dword, nBottom:dword
 
@@ -239,6 +269,15 @@ local	points[4]:POINT
 		ret
         align 4
 Rectangle endp
+
+;--- RoundRect: drawn as a rectangle (no rounded corners)
+
+RoundRect proc public hdc:dword, nLeft:dword, nTop:dword, nRight:dword, nBottom:dword, nWidth:dword, nHeight:dword
+		invoke Rectangle, hdc, nLeft, nTop, nRight, nBottom
+		@strace <"RoundRect(", hdc, ", ", nLeft, ", ", nTop, ", ", nRight, ", ", nBottom, ")=", eax>
+		ret
+        align 4
+RoundRect endp
 
 ;--- GdiFlush is not supported in win9x
 

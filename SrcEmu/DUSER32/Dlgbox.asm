@@ -22,7 +22,8 @@ endif
 ;--- class "HXDlg", whose window procedure hands every message to the dialog procedure (DefWindowProc
 ;--- if it returns FALSE). The template is only read to find the default push button: the dialog
 ;--- procedure gets WM_INITDIALOG, then WM_COMMAND with the id of that button (as if the user had
-;--- pressed Enter on the setup dialog of a demo: "Start", "Run"...), then IDOK, IDCANCEL and WM_CLOSE,
+;--- pressed Enter on the setup dialog of a demo: "Start", "Run"...), then IDOK, the first plain push
+;--- button if the template has no default one (as if the user clicked it), IDCANCEL and WM_CLOSE,
 ;--- until it calls EndDialog(). A modeless dialog (CreateDialogParam) gets WM_INITDIALOG, and the
 ;--- WM_COMMAND of its default button is posted to its window. The check state of buttons set by
 ;--- CheckDlgButton/CheckRadioButton/BM_SETCHECK is kept, so IsDlgButtonChecked reads back the
@@ -526,13 +527,33 @@ _SkipSzOrd proc
 		align 4
 _SkipSzOrd endp
 
-;--- id of the default push button of a template (DLGTEMPLATE or DLGTEMPLATEEX), IDOK if none
+;--- id of the default push button of a template (DLGTEMPLATE or DLGTEMPLATEEX), IDOK if none.
+;--- _DlgFirstPush: id of the first plain push button (BS_PUSHBUTTON) that is neither IDOK nor
+;--- IDCANCEL, 0 if none: setup dialogs without a default button ("Begin", "Nah") are started
+;--- with it, as the user would click the first button.
 
-_DlgDefButton proc uses ebx esi edi pTemplate:dword
+_DlgScanButtons proto pTemplate:dword, dwKind:dword
+
+_DlgFirstPush proc pTemplate:dword
+		invoke _DlgScanButtons, pTemplate, 0
+		ret
+		align 4
+_DlgFirstPush endp
+
+_DlgDefButton proc pTemplate:dword
+		invoke _DlgScanButtons, pTemplate, ?DEFPUSH
+		ret
+		align 4
+_DlgDefButton endp
+
+_DlgScanButtons proc uses ebx esi edi pTemplate:dword, dwKind:dword
 
 local	dwId:dword
 
 		mov dwId, IDOK
+		.if (dwKind != ?DEFPUSH)
+			mov dwId, 0
+		.endif
 		mov esi, pTemplate
 		and esi, esi
 		jz done
@@ -574,9 +595,11 @@ local	dwId:dword
 			.endif
 			.if ((word ptr [esi] == 0FFFFh) && (word ptr [esi+2] == ?BUTTON))
 				and edx, 0Fh
-				.if (edx == ?DEFPUSH)
-					mov dwId, ebx
-					jmp done
+				.if (edx == dwKind)
+					.if ((edx == ?DEFPUSH) || ((ebx != IDOK) && (ebx != IDCANCEL) && (ebx != 0FFFFh)))
+						mov dwId, ebx
+						jmp done
+					.endif
 				.endif
 			.endif
 			call _SkipSzOrd	;class
@@ -589,7 +612,7 @@ done:
 		mov eax, dwId
 		ret
 		align 4
-_DlgDefButton endp
+_DlgScanButtons endp
 
 _RunDialog proc uses ebx lpDialogProc:dword, dwInitParm:dword, hwndParent:dword, pTemplate:dword
 
@@ -618,6 +641,12 @@ local	dwDefId:dword
 			.if (!dlg.bEnded)
 				invoke _DlgSend, ebx, WM_COMMAND, IDOK, 0
 			.endif
+			.if ((!dlg.bEnded) && (dwDefId == IDOK))
+				invoke _DlgFirstPush, pTemplate
+				.if (eax)
+					invoke _DlgSend, ebx, WM_COMMAND, eax, 0
+				.endif
+			.endif
 			.if (!dlg.bEnded)
 				invoke _DlgSend, ebx, WM_COMMAND, IDCANCEL, 0
 			.endif
@@ -630,6 +659,8 @@ local	dwDefId:dword
 ;--- from the DLGSTATE (on this stack) and left to DefWindowProc.
 			.if (dlg.hDlg)
 				invoke SetWindowLongA, dlg.hDlg, ?DLGSTATEOFS, 0
+;--- EndDialog hides the dialog on Windows: the next window shown gets WM_ACTIVATEAPP
+				invoke ShowWindow, dlg.hDlg, SW_HIDE
 			.endif
 		.endif
 		mov eax, dlg.pPrev

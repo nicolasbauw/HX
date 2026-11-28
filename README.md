@@ -358,6 +358,28 @@ Dialogs (`Dlgbox.asm`) now have the window extra bytes of Windows dialogs (`DLGW
 freed when the dialog ends (it is detached from the dialog and left to `DefWindowProc`): programs that keep `hDlg` and use it
 after `DialogBox` returns read freed memory otherwise.
 
+### 19. Setup dialogs without a default button, activation, icons (DUSER32); PolyPolygon, RoundRect (DGDI32)
+
+**Symptom.** Some demos quit within a second without a word: their setup dialog has no default button (“Begin Wire”,
+“Nah”), so IDOK is ignored and the IDCANCEL sent next (item 8) quits; past the dialog, others stop on an MFC error box
+(“CWnd->SetIcon::SetClassLong()”), wait forever for `WM_ACTIVATEAPP`, or find no `PolyPolygon`/`RoundRect` in GDI32.
+
+**Cause.** `DialogBox` only knew the `BS_DEFPUSHBUTTON` of the template; the hidden window of an ended modal dialog
+stayed visible and active, so the next window shown never got `WM_ACTIVATEAPP`; `LoadIcon` always failed
+(`CreateIconFromResource` was a stub, there are no system icons) and `Get/SetClassLong` ignored `GCL_HICON`, so the
+previous icon read back as 0; DGDI32 had no `PolyPolygon` nor `RoundRect` and `PolyPolyline` was a stub.
+
+**Change.** `SrcEmu/DUSER32/Dlgbox.asm`: when the template has no default button and IDOK does not end the dialog, the
+first plain push button (other than IDOK, IDCANCEL and -1) is sent before IDCANCEL, as the user would click it; the
+window of a modal dialog is hidden when it ends (as `EndDialog` does). `WINDOWS.ASM` (`SetActiveWindow`): a top-level
+window activated after a hidden one gets `WM_ACTIVATEAPP(TRUE)`. `ICON.ASM`: an icon “handle” is the address of its
+resource data (icons are never drawn: `DrawIcon` does nothing), a system icon (`IDI_xxx`) is its own id, `CopyIcon` and
+`DestroyIcon` succeed, `SizeofResource` gets the right resource handle. `WNDCLASS.ASM`: `GCL_HICON` and `GCL_HICONSM`.
+`SrcEmu/DGDI32/LINE.ASM`: `PolyPolygon` and `PolyPolyline` draw one `Polygon`/`Polyline` per figure (each polygon is
+filled on its own, not their union with the fill mode), `RoundRect` draws a rectangle (no rounded corners). Tested with
+`c/tests/win32/dialog.c` and `smallfuncs.c` of [Bare86](https://github.com/nicolasbauw/bare86) (tests `hx_dialog`,
+`hx_smallfuncs`); the demos `wireworld` and `trx-elec` run.
+
 ## Building
 
 HX's own build needs Open Watcom's `wmake` or `nmake`, JWasm, JWlink and a DOS or

@@ -197,6 +197,10 @@ getclsofs proc
 			lea eax, [edx].WNDCLASSEX.hbrBackground
 		.elseif (ecx == GCL_HCURSOR)
 			lea eax, [edx].WNDCLASSEX.hCursor
+		.elseif (ecx == -14)		;GCL_HICON
+			lea eax, [edx].WNDCLASSEX.hIcon
+		.elseif (ecx == -34)		;GCL_HICONSM
+			lea eax, [edx].WNDCLASSEX.hIconSM
 ;		.elseif (ecx == GCL_HMODULE)
 ;			lea eax, [edx].WNDCLASSEX.hModule
 		.elseif (ecx == GCL_CBWNDEXTRA)

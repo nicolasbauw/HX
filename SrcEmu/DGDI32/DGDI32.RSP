@@ -156,10 +156,12 @@ EXPORT {
  PlayMetaFileRecord
  Polygon
  Polyline
+ PolyPolygon
  PolyPolyline
  PtVisible
  RealizePalette
  Rectangle
+ RoundRect
  RectVisible
  ResetDCA
  ResizePalette

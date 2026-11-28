@@ -1290,7 +1290,17 @@ endif
 		cmp ebx, g_hwndActive
 		jz exit2
 		.if (g_hwndActive)
-			invoke SendMessage, g_hwndActive, WM_ACTIVATE, WA_INACTIVE, ebx
+			mov ecx, g_hwndActive
+			mov edx, [ecx].WNDOBJ.dwStyle
+			push edx
+			invoke SendMessage, ecx, WM_ACTIVATE, WA_INACTIVE, ebx
+			pop edx
+;--- the active window was hidden (the window of a setup dialog kept after DialogBox, a hidden
+;--- MFC frame): on Windows the program had lost the activation, it gets WM_ACTIVATEAPP again
+;--- (demos render only once it says they are active).
+			.if ((!(edx & WS_VISIBLE)) && ebx && (!([ebx].WNDOBJ.dwStyle & WS_CHILD)))
+				invoke SendMessage, ebx, WM_ACTIVATEAPP, 1, 0
+			.endif
 		.elseif (ebx)
 ;			invoke SendMessage, g_hwndActive, WM_ACTIVATEAPP, 1, 0
 			invoke SendMessage, ebx, WM_ACTIVATEAPP, 1, 0
