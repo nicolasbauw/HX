@@ -495,7 +495,8 @@ GetPaletteEntries proc public uses ebx esi edi hpal:DWORD, iStart:DWORD, cEntrie
 			.while (ecx)
 				.break .if (edx >= [ebx].PALETTEOBJ.cntEntries)
 				mov eax,[esi+edx*4]
-				mov [edi+edx*4],eax
+				mov [edi],eax		;entry iStart goes to lppe[0]
+				add edi,4
 				inc edx
 				dec ecx
 			.endw
@@ -528,7 +529,8 @@ endif
 ;				.break .if (edx >= [ebx].PALETTEOBJ.cntEntries)
 				.break .if (dh)
 				mov eax,[esi+edx*4]
-				mov [edi+edx*4],eax
+				mov [edi],eax		;entry iStart goes to lppe[0]
+				add edi,4
 				inc edx
 				dec ecx
 			.endw

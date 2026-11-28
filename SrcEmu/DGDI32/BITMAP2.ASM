@@ -145,8 +145,17 @@ local	bmih:BITMAPINFOHEADER
             and al,0FEh		;word align
             mov ecx, eax
         	mov eax, cbBuffer
-            cdq
-            div ecx
+;--- a negative size counts as its absolute value (as in Wine, which follows Windows): -32 is 32 bytes;
+;--- the division is unsigned (cdq made it overflow)
+            .if (SDWORD ptr eax < 0)
+                neg eax
+            .endif
+            xor edx, edx
+            .if (ecx)
+                div ecx
+            .else
+                xor eax, eax
+            .endif
 if ?USEDIRECTION
 			mov edx, bmih.biHeight
             and edx, 7FFFFFFFh
@@ -185,8 +194,17 @@ local	bmih:BITMAPINFOHEADER
             and al,0FEh		;word align
             mov ecx, eax
         	mov eax, cbBuffer
-            cdq
-            div ecx
+;--- a negative size counts as its absolute value (as in Wine, which follows Windows): -32 is 32 bytes;
+;--- the division is unsigned (cdq made it overflow)
+            .if (SDWORD ptr eax < 0)
+                neg eax
+            .endif
+            xor edx, edx
+            .if (ecx)
+                div ecx
+            .else
+                xor eax, eax
+            .endif
 if ?USEDIRECTION
 			mov edx, bmih.biHeight
             and edx, 7FFFFFFFh

@@ -7,7 +7,7 @@ program that runs DOS programs, and Windows programs through HX, on Linux.
 
 Upstream is based on v2.24 (`198ec32`). Nothing else than what is listed under
 [What this fork changes](#what-this-fork-changes) differs from it. Seven binaries
-differ from the official HX package (`DPMILD32.EXE`, `DGDI32.DLL`, `DUSER32.DLL`, `VESA32.DLL`, `WINMM.DLL`, `OLE32.DLL`, `COMCTL32.DLL`, `VERSION.DLL`, `DDDRAW.DLL`)
+differ from the official HX package (`DPMILD32.EXE`, `DGDI32.DLL`, `DUSER32.DLL`, `VESA32.DLL`, `WINMM.DLL`, `OLE32.DLL`, `COMCTL32.DLL`, `VERSION.DLL`, `DDDRAW.DLL`, `DKRNL32.DLL`)
 and one is added (`MSVFW32.DLL`).
 
 ## What HX is
@@ -319,6 +319,25 @@ the display.
 16 bits with their masks; `SrcEmu/DDDRAW/SURFACE.ASM` (`SetPixelFormat`): the same for surfaces. Tested with
 `c/tests/win32/ddmodes.c` of [Bare86](https://github.com/nicolasbauw/bare86) (test `hx_ddmodes`).
 
+### 17. Palette entries, `GetBitmapBits` and `MulDiv` (DGDI32, DKRNL32)
+
+**Symptoms.** Demos looped forever in HX's exception handling (`scwarzbild`, `plastorama2000`, `lunix-leitmotiv`), or
+stopped on a division error.
+
+**Causes and changes.**
+- `GetSystemPaletteEntries` and `GetPaletteEntries` (`SrcEmu/DGDI32/PALETTE.ASM`) wrote entry `i` to `lppe[i]` instead of
+  `lppe[i - iStart]`: asking for 7 entries from 249 wrote 1 KB past the caller's buffer, over its return address. Fixed.
+- `GetBitmapBits` (`SrcEmu/DGDI32/BITMAP2.ASM`) divided the buffer size by the scan line size with `cdq`/`div`: a negative
+  size raised a division error. A negative size now counts as its absolute value (as Wine does), the division is unsigned
+  and a zero scan line size gives 0.
+- `MulDiv` (`SrcEmu/DKRNL32/MULDIV.ASM`) used unsigned `mul`/`div`: wrong signs, no rounding, and a division error when the
+  result did not fit. Now as in Windows: signed, rounded to the nearest (halves away from zero), -1 when the divisor is 0 or
+  the result does not fit. Tested with `c/tests/win32/muldiv.c` of [Bare86](https://github.com/nicolasbauw/bare86) (test
+  `hx_muldiv`).
+
+DKRNL32 is built by the new `build-linux/build-dkrnl32.sh` (the "SBEMU" variant of `HX\BIN`, `PE HX` format; all the modules
+are linked, so it is 1 KB larger than the official one, which comes from a static library).
+
 ## Building
 
 HX's own build needs Open Watcom's `wmake` or `nmake`, JWasm, JWlink and a DOS or
@@ -344,6 +363,8 @@ build-linux/build-simple.sh version "DKRNL32.lib" [WORK_DIR]
 # result: WORK_DIR/version/out/VERSION.DLL
 build-linux/build-simple.sh dddraw "DKRNL32.lib,DGDI32.lib,VESA32.lib" [WORK_DIR]
 # result: WORK_DIR/dddraw/out/DDDRAW.DLL (same size as the official one when built from the unmodified sources)
+build-linux/build-dkrnl32.sh  [WORK_DIR]
+# result: WORK_DIR/dkrnl32/out/DKRNL32.DLL
 build-linux/build-vesa32.sh   [WORK_DIR]
 # result: WORK_DIR/vesa32/out/VESA32.DLL (same size as the official one when built from the unmodified sources)
 ```
@@ -363,12 +384,12 @@ images with it as with the official DLL.
 
 The other parts of HX (HDPMI, the other DLLs) are **not** rebuilt by this fork: use
 the binaries of the [official packages](https://github.com/Baron-von-Riedesel/HX/releases)
-and replace `BIN/DPMILD32.EXE`, `BIN/DGDI32.DLL`, `BIN/DUSER32.DLL`, `BIN/VESA32.DLL`, `BIN/WINMM.DLL`, `BIN/OLE32.DLL`, `BIN/COMCTL32.DLL`, `BIN/VERSION.DLL` and `BIN/DDDRAW.DLL` with the ones of this fork's releases, and add `BIN/MSVFW32.DLL` (HX has none).
+and replace `BIN/DPMILD32.EXE`, `BIN/DGDI32.DLL`, `BIN/DUSER32.DLL`, `BIN/VESA32.DLL`, `BIN/WINMM.DLL`, `BIN/OLE32.DLL`, `BIN/COMCTL32.DLL`, `BIN/VERSION.DLL`, `BIN/DDDRAW.DLL` and `BIN/DKRNL32.DLL` with the ones of this fork's releases, and add `BIN/MSVFW32.DLL` (HX has none).
 
 ## Use with Bare86
 
 [Bare86](https://github.com/nicolasbauw/bare86) downloads the official HX package on
-first use and checks its SHA-256. The fork's `DPMILD32.EXE`, `DGDI32.DLL`, `DUSER32.DLL`, `VESA32.DLL`, `WINMM.DLL`, `OLE32.DLL`, `COMCTL32.DLL`, `VERSION.DLL` and `DDDRAW.DLL` replace the official
+first use and checks its SHA-256. The fork's `DPMILD32.EXE`, `DGDI32.DLL`, `DUSER32.DLL`, `VESA32.DLL`, `WINMM.DLL`, `OLE32.DLL`, `COMCTL32.DLL`, `VERSION.DLL`, `DDDRAW.DLL` and `DKRNL32.DLL` replace the official
 ones in the same directory; both can be told apart by their SHA-256, given in each
 release's notes.
 
