@@ -353,6 +353,10 @@ created with `BS_DEFPUSHBUTTON` posts its own click (`WM_COMMAND`, `BN_CLICKED`)
 dialog is pressed (item 8): the setup window starts the demo with its defaults. `SrcEmu/DUSER32/dispres.asm`:
 `EnumDisplaySettings` reports 60 Hz (`DM_DISPLAYFREQUENCY`) and 5-5-5 modes as 16 bits. Tested with
 `c/tests/win32/stdctl.c` of [Bare86](https://github.com/nicolasbauw/bare86) (test `hx_stdctl`); the demo `232` runs.
+Dialogs (`Dlgbox.asm`) now have the window extra bytes of Windows dialogs (`DLGWINDOWEXTRA`: `DWL_MSGRESULT`, `DWL_DLGPROC`,
+`DWL_USER`, which dialog procedures use; HX's state moved after them), and the hidden window of a modal dialog is no longer
+freed when the dialog ends (it is detached from the dialog and left to `DefWindowProc`): programs that keep `hDlg` and use it
+after `DialogBox` returns read freed memory otherwise.
 
 ## Building
 

@@ -43,6 +43,11 @@ endif
 ?NCDESTROY	equ 82h
 ?MAXITEMS	equ 64
 
+;--- window extra bytes of a dialog: as Windows (DLGWINDOWEXTRA, 30 bytes: DWL_MSGRESULT at 0,
+;--- DWL_DLGPROC at 4, DWL_USER at 8, used by many dialog procedures), then the DLGSTATE
+?DLGEXTRA	equ 36
+?DLGSTATEOFS	equ 32
+
 ;--- window extra bytes of a control
 CTL_CHECK	equ 0
 CTL_CURSEL	equ 4
@@ -71,7 +76,7 @@ IsWindow proto :dword
 
 _DlgWndProc proc uses ebx hWnd:dword, msg:dword, wParam:dword, lParam:dword
 
-		invoke GetWindowLongA, hWnd, 0
+		invoke GetWindowLongA, hWnd, ?DLGSTATEOFS
 		.if (eax)
 			mov ebx, eax
 			push lParam
@@ -123,7 +128,7 @@ local	hInst:dword
 		.if (!g_bDlgClass)
 			invoke RtlZeroMemory, addr wc, sizeof WNDCLASS
 			mov wc.lpfnWndProc, offset _DlgWndProc
-			mov wc.cbWndExtra, 4
+			mov wc.cbWndExtra, ?DLGEXTRA
 			mov eax, hInst
 			mov wc.hInstance, eax
 			mov wc.lpszClassName, CStr("HXDlg")
@@ -138,7 +143,9 @@ local	hInst:dword
 		.if (eax)
 			mov [ebx].DLGSTATE.hDlg, eax
 			push eax
-			invoke SetWindowLongA, eax, 0, ebx
+			invoke SetWindowLongA, eax, ?DLGSTATEOFS, ebx
+			mov eax, [esp]
+			invoke SetWindowLongA, eax, 4, [ebx].DLGSTATE.lpProc	;DWL_DLGPROC
 			pop eax
 		.endif
 		ret
@@ -617,8 +624,12 @@ local	dwDefId:dword
 			.if (!dlg.bEnded)
 				invoke _DlgSend, ebx, WM_CLOSE, 0, 0
 			.endif
+;--- the hidden window is not destroyed: programs keep hDlg and use it after
+;--- DialogBox returns (GetWindowRect, SendMessage...), which Windows rejects
+;--- harmlessly, but which would read freed memory here. It is only detached
+;--- from the DLGSTATE (on this stack) and left to DefWindowProc.
 			.if (dlg.hDlg)
-				invoke DestroyWindow, dlg.hDlg
+				invoke SetWindowLongA, dlg.hDlg, ?DLGSTATEOFS, 0
 			.endif
 		.endif
 		mov eax, dlg.pPrev
